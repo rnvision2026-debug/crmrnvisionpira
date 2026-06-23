@@ -1,11 +1,11 @@
-import { json, requireAdmin } from './_helpers.js'
+import { json, requireAdmin, createAuthUser, upsertProfile } from './_helpers.js'
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return json(200, { ok: true })
   if (event.httpMethod !== 'POST') return json(405, { error: 'Método não permitido.' })
 
   try {
-    const { admin } = await requireAdmin(event)
+    await requireAdmin(event)
     const body = JSON.parse(event.body || '{}')
 
     const name = String(body.name || '').trim()
@@ -18,39 +18,26 @@ export async function handler(event) {
     if (!email || !email.includes('@')) return json(400, { error: 'Informe um e-mail válido.' })
     if (!password || password.length < 6) return json(400, { error: 'A senha precisa ter pelo menos 6 caracteres.' })
 
-    const { data: created, error: createError } = await admin.auth.admin.createUser({
+    const created = await createAuthUser({ email, password, name, role: 'vendedor' })
+    const userId = created?.user?.id || created?.id
+    if (!userId) return json(500, { error: 'Usuário criado, mas o Supabase não retornou o ID. Verifique o Auth.' })
+
+    const profile = await upsertProfile({
+      id: userId,
+      name,
       email,
-      password,
-      email_confirm: true,
-      user_metadata: { name, role: 'vendedor' }
+      phone,
+      role: 'vendedor',
+      active: true,
+      commission_rate: commissionRate
     })
-
-    if (createError) {
-      const message = createError.message?.includes('already') || createError.message?.includes('registered')
-        ? 'Esse e-mail já existe no Supabase Auth. Use outro e-mail ou edite o vendedor existente.'
-        : createError.message
-      return json(400, { error: message })
-    }
-
-    const userId = created.user.id
-    const { data: profile, error: profileError } = await admin
-      .from('profiles')
-      .upsert({
-        id: userId,
-        name,
-        email,
-        phone,
-        role: 'vendedor',
-        active: true,
-        commission_rate: commissionRate
-      }, { onConflict: 'id' })
-      .select()
-      .single()
-
-    if (profileError) return json(400, { error: profileError.message })
 
     return json(200, { ok: true, profile })
   } catch (error) {
-    return json(500, { error: error.message || 'Erro inesperado ao criar vendedor.' })
+    const raw = error.message || 'Erro inesperado ao criar vendedor.'
+    const message = raw.toLowerCase().includes('already') || raw.toLowerCase().includes('registered') || raw.toLowerCase().includes('exists')
+      ? 'Esse e-mail já existe no Supabase Auth. Use outro e-mail ou troque a senha do vendedor existente.'
+      : raw
+    return json(400, { error: message })
   }
 }

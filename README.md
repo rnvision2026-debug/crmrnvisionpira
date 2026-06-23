@@ -1,4 +1,4 @@
-# RN CRM Vendas — versão NPM/React Clean
+# RN CRM Vendas — versão NPM/React Clean Corrigida
 
 Sistema interno para vendedores da RN Vision Pira.
 
@@ -9,7 +9,7 @@ Sistema interno para vendedores da RN Vision Pira.
 - Visual clean branco, organizado e profissional.
 - Tela de boas-vindas com a logo RN Vision Pira.
 - Cadastro de vendedores direto pelo CRM.
-- Criação automática do login do vendedor via Netlify Function.
+- Criação automática do login do vendedor via Netlify Function corrigida, sem erro de WebSocket no Node 20.
 - Troca de senha do vendedor pelo painel.
 - Cadastro de serviços e valores.
 - Campos de desenvolvimento, adesão + integração e mensalidade.
@@ -97,3 +97,14 @@ Esta versão foi testada com:
 npm run build
 ```
 
+
+
+## Correção incluída nesta versão
+
+Esta versão remove o uso do cliente Supabase JS dentro das Netlify Functions e usa chamadas seguras via API do Supabase no servidor. Isso corrige o erro:
+
+```txt
+Node.js 20 detected without native WebSocket support
+```
+
+O frontend continua usando Supabase normalmente para login e dados. A chave `SUPABASE_SERVICE_ROLE_KEY` continua protegida somente no Netlify.
