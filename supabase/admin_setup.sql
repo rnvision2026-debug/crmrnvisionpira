@@ -1,10 +1,12 @@
--- Depois de criar seu usuário em Authentication > Users, rode este SQL.
--- Troque o e-mail se quiser usar outro login de admin.
+-- Rode depois de criar o usuário admin em Authentication > Users.
+-- Altere o e-mail abaixo caso queira usar outro login admin.
 
-update public.profiles
-set
-  name = 'Rennan Nascimento',
+insert into public.profiles (id, name, email, role, active, commission_rate)
+select id, 'Rennan Nascimento', email, 'admin', true, 0.1500
+from auth.users
+where email = 'admin@rnvision.com.br'
+on conflict (id) do update set
+  name = excluded.name,
   role = 'admin',
   active = true,
-  commission_rate = 0.1500
-where email = 'admin@rnvision.com.br';
+  commission_rate = excluded.commission_rate;

@@ -1,100 +1,119 @@
-# RN CRM Vendas - Versão pronta para hospedagem estática
+# RN CRM Vendas — versão NPM profissional
 
-Esta versão foi feita para resolver os erros de deploy do Netlify.
-Ela NÃO usa npm, React, Vite, package.json, node_modules ou build.
+Sistema interno da RN Vision Pira para vendedores, com React + Vite + Supabase + Netlify Functions.
 
-Você pode subir direto na hospedagem como site estático.
+## O que esta versão faz
 
-## O que vem no sistema
+- Login real pelo Supabase Auth.
+- Tela de boas-vindas com a logo RN Vision Pira após login.
+- Dashboard do admin e vendedor.
+- Cadastro de vendedores direto no CRM.
+- Criação automática do login do vendedor no Supabase Auth via Netlify Function.
+- Troca de senha de vendedor direto no CRM.
+- Cadastro de serviços e valores.
+- Campos de valores:
+  - Valor de desenvolvimento/projeto.
+  - Valor de adesão + integração.
+  - Valor de mensalidade.
+- Cadastro de leads/clientes.
+- Status de atendimento.
+- Copiar mensagem de proposta.
+- Abrir WhatsApp do lead.
+- Comissão automática por vendedor.
+- Bônus mensal por meta.
+- Regras de segurança no Supabase.
 
-- Login com Supabase Auth
-- Tela de boas-vindas com a logo da RN Vision Pira
-- Painel Admin
-- Painel do Vendedor
-- Leads e propostas
-- Serviços e valores
-- Campo de valor de desenvolvimento/projeto
-- Campo de adesão + integração
-- Campo de mensalidade
-- Comissão automática
-- Bônus mensal por desempenho
-- Cada vendedor vê apenas os próprios leads
-- Admin vê tudo
-- Modo demonstração local caso o Supabase ainda não esteja configurado
+## Arquivos que devem ir para o GitHub
 
-## Como configurar o Supabase
+Suba tudo da pasta, exceto:
 
-1. Crie um projeto no Supabase.
-2. Vá em SQL Editor > New query.
-3. Abra o arquivo `supabase/schema.sql`.
-4. Copie tudo, cole no Supabase e clique em Run.
-5. Vá em Authentication > Users > Add user.
-6. Crie o usuário:
-
-E-mail: admin@rnvision.com.br
-Senha: 123456
-
-7. Volte no SQL Editor.
-8. Rode o arquivo `supabase/admin_setup.sql`.
-
-Isso transforma o usuário admin@rnvision.com.br em administrador.
-
-## Como conectar o site ao Supabase
-
-Abra o arquivo `config.js` e preencha:
-
-```js
-window.RNCRM_CONFIG = {
-  SUPABASE_URL: "https://SEU-PROJETO.supabase.co",
-  SUPABASE_ANON_KEY: "SUA-CHAVE-ANON-PUBLICA"
-};
+```txt
+node_modules
+dist
+.env
+package-lock.json
 ```
 
-Use apenas a Anon/Public Key. Nunca use service_role no frontend.
+Esta versão tem `package.json`, mas **não tem package-lock.json** para evitar o erro de registry que você teve no Netlify.
 
-## Como subir no Netlify
+## Configuração no Netlify
 
-Esta versão não precisa de build.
+Build command:
 
-No Netlify, configure assim:
+```txt
+npm run build
+```
 
-Build command: deixar vazio
-Publish directory: .
-Base directory: deixar vazio
+Publish directory:
 
-Se estiver usando GitHub, suba todos os arquivos deste projeto na raiz do repositório.
-Não precisa package.json.
+```txt
+dist
+```
 
-Se for subir manualmente, arraste a pasta inteira no Netlify Drop.
+Base directory:
 
-## Se você já tinha um site no Netlify dando erro
+```txt
+vazio
+```
 
-Vá em:
+## Variáveis do Netlify
 
-Project configuration > Build & deploy > Build settings
+Em `Site configuration > Environment variables`, cadastre:
 
-E altere para:
+```env
+VITE_SUPABASE_URL=https://isqiekclfdvekfwblhds.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_PvFYSb8eHJdWQyniCYpOiw_CPFHVOOD
+SUPABASE_SERVICE_ROLE_KEY=cole_a_service_role_key_aqui
+```
 
-Build command: vazio
-Publish directory: .
+A `SUPABASE_SERVICE_ROLE_KEY` é obrigatória para cadastrar vendedores direto pelo CRM.
+Ela fica somente no Netlify. Não coloque essa chave no GitHub.
 
-Depois vá em:
+## Supabase
 
-Deploys > Trigger deploy > Clear cache and deploy site
+1. Entre no projeto do Supabase.
+2. Vá em `SQL Editor > New query`.
+3. Execute o arquivo:
 
-## Como cadastrar vendedores
+```txt
+supabase/schema.sql
+```
 
-1. No Supabase, vá em Authentication > Users.
-2. Clique em Add user.
-3. Crie o e-mail e senha do vendedor.
-4. O sistema cria o perfil automaticamente como vendedor.
-5. Entre no CRM como admin e ajuste o nome, comissão ou bloqueio.
+4. Vá em `Authentication > Users > Add user`.
+5. Crie:
 
-## Login demo sem Supabase
+```txt
+admin@rnvision.com.br
+123456
+```
 
-Se o `config.js` estiver vazio, o sistema entra em modo demonstração:
+6. Volte no SQL Editor e execute:
 
-Admin: admin@rnvision.com.br / 123456
-Vendedor: vendedor1@rnvision.com.br / 123456
+```txt
+supabase/admin_setup.sql
+```
 
-Os dados demo ficam salvos apenas no navegador.
+Depois disso, o admin já consegue logar e cadastrar vendedores diretamente pela plataforma.
+
+## Onde pegar a service role key
+
+Supabase > Project Settings > API Keys.
+
+Copie a chave `service_role` ou `secret` do projeto e coloque no Netlify como:
+
+```txt
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+Nunca coloque essa chave no código ou no GitHub.
+
+## Como testar localmente
+
+Crie um arquivo `.env` copiando o `.env.example` e rode:
+
+```bash
+npm install
+npm run dev
+```
+
+Para testar o cadastro de vendedor localmente, as funções do Netlify precisam rodar pelo Netlify CLI. No Netlify online funciona direto.

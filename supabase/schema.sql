@@ -1,15 +1,18 @@
--- RN CRM Vendas - Supabase
--- Execute este arquivo em Supabase > SQL Editor > New query > Run
+-- RN CRM Vendas - Schema Supabase
+-- 1) Cole e execute este arquivo no SQL Editor do Supabase.
+-- 2) Crie o usuário admin em Authentication > Users.
+-- 3) Execute o arquivo supabase/admin_setup.sql.
 
 create extension if not exists pgcrypto;
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  name text not null default '',
+  name text not null,
   email text not null unique,
-  role text not null default 'seller' check (role in ('admin', 'seller')),
+  role text not null default 'vendedor' check (role in ('admin', 'vendedor')),
   active boolean not null default true,
-  commission_rate numeric(6,4) not null default 0.1500,
+  commission_rate numeric(5,4) not null default 0.1500,
+  phone text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -17,35 +20,35 @@ create table if not exists public.profiles (
 create table if not exists public.services (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  category text default 'Serviço',
+  category text not null default 'Sites',
   description text,
-  development_value numeric(12,2) not null default 0,
-  setup_integration_value numeric(12,2) not null default 0,
-  monthly_value numeric(12,2) not null default 0,
-  delivery_time text,
+  development_price numeric(12,2) not null default 0,
+  setup_integration_price numeric(12,2) not null default 0,
+  monthly_price numeric(12,2) not null default 0,
   payment_terms text,
-  sales_pitch text,
+  delivery_time text,
+  sales_arguments text,
   active boolean not null default true,
-  created_by uuid references public.profiles(id) on delete set null,
+  sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 create table if not exists public.leads (
   id uuid primary key default gen_random_uuid(),
-  seller_id uuid not null references public.profiles(id) on delete cascade,
+  vendedor_id uuid not null references public.profiles(id) on delete restrict,
   service_id uuid references public.services(id) on delete set null,
   client_name text not null,
-  company text,
+  company_name text,
   whatsapp text,
   email text,
-  source text,
-  status text not null default 'Novo' check (status in ('Novo', 'Em atendimento', 'Proposta enviada', 'Negociação', 'Fechado', 'Perdido')),
+  origin text not null default 'WhatsApp',
+  status text not null default 'novo' check (status in ('novo','em_atendimento','proposta_enviada','negociacao','fechado','perdido')),
   proposal_value numeric(12,2) not null default 0,
-  monthly_value numeric(12,2) not null default 0,
-  next_follow_up date,
   notes text,
+  next_contact_at date,
   closed_at timestamptz,
+  loss_reason text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -53,18 +56,12 @@ create table if not exists public.leads (
 create table if not exists public.activities (
   id uuid primary key default gen_random_uuid(),
   lead_id uuid not null references public.leads(id) on delete cascade,
-  seller_id uuid not null references public.profiles(id) on delete cascade,
-  type text not null default 'note',
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null default 'observacao',
   description text not null,
   created_at timestamptz not null default now()
 );
 
-create index if not exists leads_seller_id_idx on public.leads(seller_id);
-create index if not exists leads_status_idx on public.leads(status);
-create index if not exists leads_service_id_idx on public.leads(service_id);
-create index if not exists activities_lead_id_idx on public.activities(lead_id);
-
--- Função para atualizar updated_at automaticamente
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -75,48 +72,15 @@ begin
 end;
 $$;
 
-drop trigger if exists set_profiles_updated_at on public.profiles;
-create trigger set_profiles_updated_at
-before update on public.profiles
-for each row execute function public.set_updated_at();
+drop trigger if exists trg_profiles_updated_at on public.profiles;
+create trigger trg_profiles_updated_at before update on public.profiles for each row execute function public.set_updated_at();
 
-drop trigger if exists set_services_updated_at on public.services;
-create trigger set_services_updated_at
-before update on public.services
-for each row execute function public.set_updated_at();
+drop trigger if exists trg_services_updated_at on public.services;
+create trigger trg_services_updated_at before update on public.services for each row execute function public.set_updated_at();
 
-drop trigger if exists set_leads_updated_at on public.leads;
-create trigger set_leads_updated_at
-before update on public.leads
-for each row execute function public.set_updated_at();
+drop trigger if exists trg_leads_updated_at on public.leads;
+create trigger trg_leads_updated_at before update on public.leads for each row execute function public.set_updated_at();
 
--- Cria profile automaticamente quando criar usuário em Authentication > Users
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.profiles (id, email, name, role, active)
-  values (
-    new.id,
-    new.email,
-    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
-    'seller',
-    true
-  )
-  on conflict (id) do nothing;
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-after insert on auth.users
-for each row execute function public.handle_new_user();
-
--- Função segura para checar admin nas policies
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -125,10 +89,10 @@ set search_path = public
 as $$
   select exists (
     select 1
-    from public.profiles
-    where id = auth.uid()
-      and role = 'admin'
-      and active = true
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.role = 'admin'
+      and p.active = true
   );
 $$;
 
@@ -137,145 +101,88 @@ alter table public.services enable row level security;
 alter table public.leads enable row level security;
 alter table public.activities enable row level security;
 
--- Remove policies antigas, caso você rode o SQL mais de uma vez
-drop policy if exists profiles_select_policy on public.profiles;
-drop policy if exists profiles_update_policy on public.profiles;
-drop policy if exists profiles_insert_policy on public.profiles;
+drop policy if exists profiles_select on public.profiles;
+drop policy if exists profiles_update_admin on public.profiles;
+drop policy if exists profiles_insert_admin on public.profiles;
+drop policy if exists profiles_delete_admin on public.profiles;
 
-drop policy if exists services_select_policy on public.services;
-drop policy if exists services_admin_insert_policy on public.services;
-drop policy if exists services_admin_update_policy on public.services;
-drop policy if exists services_admin_delete_policy on public.services;
+drop policy if exists services_select on public.services;
+drop policy if exists services_insert_admin on public.services;
+drop policy if exists services_update_admin on public.services;
+drop policy if exists services_delete_admin on public.services;
 
-drop policy if exists leads_select_policy on public.leads;
-drop policy if exists leads_insert_policy on public.leads;
-drop policy if exists leads_update_policy on public.leads;
-drop policy if exists leads_delete_policy on public.leads;
+drop policy if exists leads_select on public.leads;
+drop policy if exists leads_insert on public.leads;
+drop policy if exists leads_update on public.leads;
+drop policy if exists leads_delete_admin on public.leads;
 
-drop policy if exists activities_select_policy on public.activities;
-drop policy if exists activities_insert_policy on public.activities;
-drop policy if exists activities_update_policy on public.activities;
-drop policy if exists activities_delete_policy on public.activities;
+drop policy if exists activities_select on public.activities;
+drop policy if exists activities_insert on public.activities;
+drop policy if exists activities_update_admin on public.activities;
+drop policy if exists activities_delete_admin on public.activities;
 
--- Profiles
-create policy profiles_select_policy
-on public.profiles
-for select
-to authenticated
-using (id = auth.uid() or public.is_admin());
+create policy profiles_select on public.profiles
+for select using (public.is_admin() or id = auth.uid());
 
-create policy profiles_update_policy
-on public.profiles
-for update
-to authenticated
-using (id = auth.uid() or public.is_admin())
-with check (id = auth.uid() or public.is_admin());
+create policy profiles_insert_admin on public.profiles
+for insert with check (public.is_admin());
 
-create policy profiles_insert_policy
-on public.profiles
-for insert
-to authenticated
-with check (id = auth.uid() or public.is_admin());
+create policy profiles_update_admin on public.profiles
+for update using (public.is_admin() or id = auth.uid())
+with check (public.is_admin() or id = auth.uid());
 
--- Services
-create policy services_select_policy
-on public.services
-for select
-to authenticated
-using (active = true or public.is_admin());
+create policy profiles_delete_admin on public.profiles
+for delete using (public.is_admin());
 
-create policy services_admin_insert_policy
-on public.services
-for insert
-to authenticated
-with check (public.is_admin());
+create policy services_select on public.services
+for select using (active = true or public.is_admin());
 
-create policy services_admin_update_policy
-on public.services
-for update
-to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+create policy services_insert_admin on public.services
+for insert with check (public.is_admin());
 
-create policy services_admin_delete_policy
-on public.services
-for delete
-to authenticated
-using (public.is_admin());
+create policy services_update_admin on public.services
+for update using (public.is_admin()) with check (public.is_admin());
 
--- Leads
-create policy leads_select_policy
-on public.leads
-for select
-to authenticated
-using (seller_id = auth.uid() or public.is_admin());
+create policy services_delete_admin on public.services
+for delete using (public.is_admin());
 
-create policy leads_insert_policy
-on public.leads
-for insert
-to authenticated
-with check (seller_id = auth.uid() or public.is_admin());
+create policy leads_select on public.leads
+for select using (public.is_admin() or vendedor_id = auth.uid());
 
-create policy leads_update_policy
-on public.leads
-for update
-to authenticated
-using (seller_id = auth.uid() or public.is_admin())
-with check (seller_id = auth.uid() or public.is_admin());
+create policy leads_insert on public.leads
+for insert with check (public.is_admin() or vendedor_id = auth.uid());
 
-create policy leads_delete_policy
-on public.leads
-for delete
-to authenticated
-using (public.is_admin());
+create policy leads_update on public.leads
+for update using (public.is_admin() or vendedor_id = auth.uid())
+with check (public.is_admin() or vendedor_id = auth.uid());
 
--- Activities
-create policy activities_select_policy
-on public.activities
-for select
-to authenticated
-using (
-  seller_id = auth.uid()
-  or public.is_admin()
-  or exists (select 1 from public.leads l where l.id = activities.lead_id and l.seller_id = auth.uid())
+create policy leads_delete_admin on public.leads
+for delete using (public.is_admin());
+
+create policy activities_select on public.activities
+for select using (
+  public.is_admin()
+  or user_id = auth.uid()
+  or exists (select 1 from public.leads l where l.id = activities.lead_id and l.vendedor_id = auth.uid())
 );
 
-create policy activities_insert_policy
-on public.activities
-for insert
-to authenticated
-with check (seller_id = auth.uid() or public.is_admin());
+create policy activities_insert on public.activities
+for insert with check (
+  public.is_admin()
+  or user_id = auth.uid()
+  or exists (select 1 from public.leads l where l.id = lead_id and l.vendedor_id = auth.uid())
+);
 
-create policy activities_update_policy
-on public.activities
-for update
-to authenticated
-using (seller_id = auth.uid() or public.is_admin())
-with check (seller_id = auth.uid() or public.is_admin());
+create policy activities_update_admin on public.activities
+for update using (public.is_admin()) with check (public.is_admin());
 
-create policy activities_delete_policy
-on public.activities
-for delete
-to authenticated
-using (seller_id = auth.uid() or public.is_admin());
+create policy activities_delete_admin on public.activities
+for delete using (public.is_admin());
 
--- Serviços iniciais
-insert into public.services (name, category, description, development_value, setup_integration_value, monthly_value, delivery_time, payment_terms, sales_pitch, active)
-select 'Site Profissional', 'Sites', 'Site institucional moderno, responsivo, com WhatsApp integrado, formulário e otimização básica para Google.', 1599.00, 0.00, 0.00, '7 a 12 dias úteis', '50% para iniciar e 50% na entrega', 'Ideal para empresas que querem passar mais profissionalismo, credibilidade e receber contatos pelo WhatsApp.', true
-where not exists (select 1 from public.services where name = 'Site Profissional');
-
-insert into public.services (name, category, description, development_value, setup_integration_value, monthly_value, delivery_time, payment_terms, sales_pitch, active)
-select 'Sistema Personalizado', 'Sistemas', 'Sistema web sob medida para gestão, processos internos, relatórios, usuários e controle por empresa.', 2499.00, 399.00, 149.90, '15 a 30 dias úteis', 'Desenvolvimento + adesão/integração + mensalidade', 'Para empresas que querem sair das planilhas e organizar o atendimento, financeiro, estoque ou processos internos.', true
-where not exists (select 1 from public.services where name = 'Sistema Personalizado');
-
-insert into public.services (name, category, description, development_value, setup_integration_value, monthly_value, delivery_time, payment_terms, sales_pitch, active)
-select 'CRM Interno de Vendas', 'CRM', 'Sistema para controlar vendedores, leads, propostas, comissões, bônus e acompanhamento comercial.', 0.00, 299.00, 99.90, '3 a 7 dias úteis', 'Adesão + mensalidade', 'Ajuda a empresa a não perder clientes, acompanhar cada vendedor e medir propostas e vendas fechadas.', true
-where not exists (select 1 from public.services where name = 'CRM Interno de Vendas');
-
-insert into public.services (name, category, description, development_value, setup_integration_value, monthly_value, delivery_time, payment_terms, sales_pitch, active)
-select 'RN Delivery', 'Delivery', 'Cardápio online com pedidos, painel para restaurante, formas de pagamento e organização por WhatsApp.', 0.00, 299.00, 59.90, '3 a 7 dias úteis', 'Adesão + mensalidade', 'Transforma o cardápio do restaurante em um canal de vendas online simples e profissional.', true
-where not exists (select 1 from public.services where name = 'RN Delivery');
-
-insert into public.services (name, category, description, development_value, setup_integration_value, monthly_value, delivery_time, payment_terms, sales_pitch, active)
-select 'Catálogo com Painel', 'Catálogos', 'Catálogo online com painel administrativo para cadastrar produtos, veículos, fotos, descrições e botão de WhatsApp.', 2499.00, 0.00, 99.90, '10 a 20 dias úteis', '50% para iniciar e 50% na entrega + mensalidade quando houver painel', 'Perfeito para lojas, veículos e empresas que precisam atualizar produtos sem depender do desenvolvedor.', true
-where not exists (select 1 from public.services where name = 'Catálogo com Painel');
+insert into public.services (name, category, description, development_price, setup_integration_price, monthly_price, payment_terms, delivery_time, sales_arguments, active, sort_order)
+values
+('Site Institucional Profissional', 'Sites', 'Site responsivo com apresentação da empresa, serviços, botão de WhatsApp, formulário e otimização básica para Google.', 1599, 0, 0, '50% para iniciar e 50% na entrega, após aprovação.', '7 a 15 dias úteis', 'Mostra profissionalismo, passa confiança e ajuda o cliente a encontrar a empresa no Google.', true, 1),
+('Catálogo Online com Painel', 'Sites', 'Catálogo de produtos, veículos ou serviços com painel para cadastrar e editar itens.', 2499, 0, 0, '50% para iniciar e 50% na entrega, após aprovação.', '15 a 25 dias úteis', 'Ideal para empresas que precisam divulgar produtos e receber contatos pelo WhatsApp.', true, 2),
+('Sistema de Gestão Personalizado', 'Sistemas', 'Sistema interno para clientes, estoque, orçamentos, ordens de serviço, financeiro e relatórios.', 3499, 499, 149.90, 'Desenvolvimento conforme escopo. Adesão e integração na implantação. Mensalidade após entrega.', '25 a 45 dias úteis', 'Reduz planilhas, organiza processos e dá controle real da operação.', true, 3),
+('CRM Interno para Vendedores', 'Sistemas', 'Sistema para vendedores controlarem leads, propostas, retornos, vendas e comissões.', 2499, 399, 99.90, 'Desenvolvimento + adesão na implantação. Mensalidade para suporte, hospedagem e melhorias.', '15 a 30 dias úteis', 'Ajuda a equipe comercial a não perder clientes e acompanhar tudo por status.', true, 4)
+on conflict do nothing;
