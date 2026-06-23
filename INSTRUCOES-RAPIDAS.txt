@@ -1,26 +1,18 @@
-RN CRM Vendas - Instruções rápidas
+RN CRM Vendas — versão NPM/React Clean
 
-1) Suba no GitHub esta pasta inteira.
-Não suba: node_modules, dist, .env, package-lock.json.
+1. Suba no GitHub os arquivos desta pasta.
+2. Não suba: node_modules, dist, .env e package-lock.json.
+3. No Netlify use:
+   Base directory: deixe em branco
+   Build command: npm run build
+   Publish directory: dist
+4. Cadastre no Netlify:
+   VITE_SUPABASE_URL
+   VITE_SUPABASE_ANON_KEY
+   SUPABASE_SERVICE_ROLE_KEY
+5. No Supabase, rode supabase/schema.sql.
+6. Crie o admin no Supabase Auth.
+7. Rode supabase/admin_setup.sql.
+8. Faça deploy no Netlify.
 
-2) No Netlify configure:
-Build command: npm run build
-Publish directory: dist
-Base directory: vazio
-
-3) No Netlify coloque as variáveis:
-VITE_SUPABASE_URL=https://isqiekclfdvekfwblhds.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_PvFYSb8eHJdWQyniCYpOiw_CPFHVOOD
-SUPABASE_SERVICE_ROLE_KEY=cole_a_service_role_key_do_supabase
-
-4) No Supabase rode:
-supabase/schema.sql
-
-5) Crie o admin no Supabase Auth:
-admin@rnvision.com.br
-123456
-
-6) Rode:
-supabase/admin_setup.sql
-
-7) Acesse o sistema e cadastre vendedores direto pelo CRM.
+Visual atualizado para padrão clean branco e profissional.

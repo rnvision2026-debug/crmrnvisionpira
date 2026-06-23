@@ -1,6 +1,6 @@
 {
-  "name": "rn-crm-vendas-npm-final",
-  "version": "2.0.0",
+  "name": "rn-crm-vendas-npm-clean",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "scripts": {
