@@ -61,21 +61,40 @@ function Login({ onLogin, loading, error }) {
   </div>
 }
 
-function Sidebar({ page, setPage, profile, onLogout }) {
+function Sidebar({ page, setPage, profile, onLogout, open, onClose }) {
   const items = [
     ['dashboard', 'Dashboard', '📊'], ['leads', 'Leads', '👥'], ['servicos', 'Serviços e valores', '💼'], ['comissoes', 'Comissões', '💰'],
     ...(profile.role === 'admin' ? [['vendedores', 'Vendedores', '🧑‍💼']] : []), ['config', 'Configurações', '⚙️']
   ]
-  return <aside className="sidebar">
-    <img src={LOGO} className="side-logo" alt="RN Vision Pira" />
-    <nav>{items.map(([id, label, icon]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><span>{icon}</span>{label}</button>)}</nav>
+  function navigate(id) {
+    setPage(id)
+    onClose?.()
+  }
+  return <aside className={`sidebar ${open ? 'open' : ''}`} aria-label="Menu principal">
+    <div className="sidebar-head">
+      <img src={LOGO} className="side-logo" alt="RN Vision Pira" />
+      <button type="button" className="menu-close" onClick={onClose} aria-label="Fechar menu">×</button>
+    </div>
+    <nav>{items.map(([id, label, icon]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => navigate(id)}><span>{icon}</span>{label}</button>)}</nav>
     <div className="profile-box"><div className="avatar">{profile.name?.[0] || 'R'}</div><div><b>{profile.name}</b><small>{profile.role === 'admin' ? 'Administrador' : 'Vendedor'}</small></div></div>
     <button className="logout" onClick={onLogout}>Sair</button>
   </aside>
 }
 
 function Layout({ page, setPage, profile, onLogout, title, children }) {
-  return <div className="app"><Sidebar page={page} setPage={setPage} profile={profile} onLogout={onLogout} /><main><header className="topbar"><div><h2>{title}</h2><p>{profile.role === 'admin' ? 'Controle completo da equipe comercial.' : 'Acompanhe seus leads, retornos e comissões.'}</p></div><div className="top-actions"><span className="online">Supabase conectado</span><button className="logout-top" type="button" onClick={onLogout}>Sair do sistema</button></div></header>{children}</main></div>
+  const [menuOpen, setMenuOpen] = useState(false)
+  useEffect(() => {
+    document.body.classList.toggle('menu-open', menuOpen)
+    return () => document.body.classList.remove('menu-open')
+  }, [menuOpen])
+  return <div className="app">
+    <button type="button" className={`menu-backdrop ${menuOpen ? 'show' : ''}`} onClick={() => setMenuOpen(false)} aria-label="Fechar menu" />
+    <Sidebar page={page} setPage={setPage} profile={profile} onLogout={onLogout} open={menuOpen} onClose={() => setMenuOpen(false)} />
+    <main>
+      <header className="topbar"><div className="top-title"><button type="button" className="menu-toggle" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">☰</button><div><h2>{title}</h2><p>{profile.role === 'admin' ? 'Controle completo da equipe comercial.' : 'Acompanhe seus leads, retornos e comissões.'}</p></div></div><div className="top-actions"><span className="online">Supabase conectado</span><button className="logout-top" type="button" onClick={onLogout}>Sair do sistema</button></div></header>
+      {children}
+    </main>
+  </div>
 }
 
 function Stat({ label, value, hint }) {
@@ -162,10 +181,21 @@ function LeadsPage({ profile, profiles, services, leads, reload, notify }) {
     setShow(false); setEditing(null); notify('Lead salvo com sucesso.', 'ok'); reload()
   }
   async function removeLead(id) {
+    if (profile.role !== 'admin') return notify('Apenas o admin pode excluir leads.', 'danger')
     if (!confirm('Excluir este lead?')) return
     const { error } = await supabase.from('leads').delete().eq('id', id)
     if (error) return notify(error.message, 'danger')
     notify('Lead excluído.', 'ok'); reload()
+  }
+  async function updateLeadStatus(lead, nextStatus) {
+    const payload = {
+      status: nextStatus,
+      closed_at: nextStatus === 'fechado' ? (lead.closed_at || todayISO()) : null
+    }
+    const { error } = await supabase.from('leads').update(payload).eq('id', lead.id)
+    if (error) return notify(error.message, 'danger')
+    notify('Status atualizado.', 'ok')
+    reload()
   }
   function copyLead(l) {
     const service = services.find(s => s.id === l.service_id)
@@ -175,7 +205,7 @@ function LeadsPage({ profile, profiles, services, leads, reload, notify }) {
   return <div className="grid gap">
     <section className="toolbar"><input placeholder="Buscar lead..." value={search} onChange={e => setSearch(e.target.value)} /><select value={status} onChange={e => setStatus(e.target.value)}><option value="todos">Todos os status</option>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select><button className="primary" onClick={() => { setEditing(null); setShow(true) }}>+ Novo lead</button></section>
     {show && <LeadForm profile={profile} profiles={profiles} services={services} editing={editing} onCancel={() => { setShow(false); setEditing(null) }} onSave={saveLead} />}
-    <section className="card"><div className="table-wrap"><table><thead><tr><th>Cliente</th><th>Serviço</th><th>Status</th><th>Valor</th><th>Retorno</th><th>Vendedor</th><th>Ações</th></tr></thead><tbody>{filtered.map(l => { const seller = profiles.find(p => p.id === l.vendedor_id); const service = services.find(s => s.id === l.service_id); return <tr key={l.id}><td><b>{l.client_name}</b><small>{l.company_name || l.whatsapp || '-'}</small></td><td>{service?.name || '-'}</td><td><span className={`status ${l.status}`}>{statusLabel(l.status)}</span></td><td><b>{money(l.proposal_value)}</b></td><td>{l.next_contact_at || '-'}</td><td>{seller?.name || '-'}</td><td className="actions"><button onClick={() => copyLead(l)}>Copiar</button>{l.whatsapp && <a target="_blank" rel="noreferrer" href={`https://wa.me/55${cleanPhone(l.whatsapp)}`}>WhatsApp</a>}<button onClick={() => { setEditing(l); setShow(true) }}>Editar</button>{profile.role === 'admin' && <button className="danger" onClick={() => removeLead(l.id)}>Excluir</button>}</td></tr> })}</tbody></table>{!filtered.length && <p className="empty">Nenhum lead encontrado.</p>}</div></section>
+    <section className="card"><div className="table-wrap"><table><thead><tr><th>Cliente</th><th>Serviço</th><th>Status</th><th>Valor</th><th>Retorno</th><th>Vendedor</th><th>Ações</th></tr></thead><tbody>{filtered.map(l => { const seller = profiles.find(p => p.id === l.vendedor_id); const service = services.find(s => s.id === l.service_id); return <tr key={l.id}><td><b>{l.client_name}</b><small>{l.company_name || l.whatsapp || '-'}</small></td><td>{service?.name || '-'}</td><td><select className={`status-select ${l.status}`} value={l.status} onChange={(e) => updateLeadStatus(l, e.target.value)}>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></td><td><b>{money(l.proposal_value)}</b></td><td>{l.next_contact_at || '-'}</td><td>{seller?.name || '-'}</td><td className="actions"><button onClick={() => copyLead(l)}>Copiar</button>{l.whatsapp && <a target="_blank" rel="noreferrer" href={`https://wa.me/55${cleanPhone(l.whatsapp)}`}>WhatsApp</a>}<button onClick={() => { setEditing(l); setShow(true) }}>Editar</button>{profile.role === 'admin' && <button className="danger" onClick={() => removeLead(l.id)}>Excluir lead</button>}</td></tr> })}</tbody></table>{!filtered.length && <p className="empty">Nenhum lead encontrado.</p>}</div></section>
   </div>
 }
 
@@ -247,22 +277,9 @@ function SellersPage({ profiles, reload, notify, session }) {
     if (!res.ok) return notify(data.error || 'Erro ao trocar senha.', 'danger')
     setReset({ user_id: '', password: '' }); notify('Senha alterada.', 'ok')
   }
-  async function deleteSeller(seller) {
-    const ok = confirm(`Excluir o vendedor ${seller.name}?\n\nO login dele será removido do Supabase Auth. Para não perder histórico, os leads desse vendedor serão transferidos para o administrador.`)
-    if (!ok) return
-    const res = await fetch('/.netlify/functions/delete-seller', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ user_id: seller.id })
-    })
-    const data = await res.json()
-    if (!res.ok) return notify(data.error || 'Erro ao excluir vendedor.', 'danger')
-    notify(data.reassigned_leads ? `Vendedor excluído. ${data.reassigned_leads} lead(s) foram transferidos para o administrador.` : 'Vendedor excluído.', 'ok')
-    reload()
-  }
   return <div className="grid gap">
     <form className="card form" onSubmit={createSeller}><h3>Cadastrar vendedor direto no CRM</h3><p className="muted">O sistema cria o usuário no Supabase Auth e o perfil de vendedor automaticamente.</p><div className="form-grid"><label>Nome<input value={form.name} onChange={e => set('name', e.target.value)} required /></label><label>E-mail<input type="email" value={form.email} onChange={e => set('email', e.target.value)} required /></label><label>Senha inicial<input type="password" value={form.password} onChange={e => set('password', e.target.value)} minLength="6" required /></label><label>WhatsApp<input value={form.phone} onChange={e => set('phone', e.target.value)} /></label><label>Comissão<select value={form.commission_rate} onChange={e => set('commission_rate', Number(e.target.value))}><option value="0.15">15%</option><option value="0.10">10%</option><option value="0.20">20%</option></select></label></div><button className="primary">Criar vendedor com login</button></form>
-    <section className="card"><h3>Vendedores cadastrados</h3><div className="table-wrap"><table><thead><tr><th>Vendedor</th><th>E-mail</th><th>Comissão</th><th>Status</th><th>Ações</th></tr></thead><tbody>{sellers.map(s => <tr key={s.id}><td><b>{s.name}</b><small>{s.phone || '-'}</small></td><td>{s.email}</td><td>{pct(s.commission_rate)}</td><td><span className={s.active ? 'badge ok' : 'badge off'}>{s.active ? 'Ativo' : 'Bloqueado'}</span></td><td className="actions"><button onClick={() => toggleSeller(s)}>{s.active ? 'Bloquear' : 'Ativar'}</button><button onClick={() => { const rate = prompt('Comissão em porcentagem. Ex: 15', Math.round(s.commission_rate * 100)); if (rate) saveProfile(s, { commission_rate: Number(rate) / 100 }) }}>Comissão</button><button onClick={() => setReset({ user_id: s.id, password: '' })}>Trocar senha</button><button className="danger" onClick={() => deleteSeller(s)}>Excluir</button></td></tr>)}</tbody></table>{!sellers.length && <p className="empty">Nenhum vendedor cadastrado.</p>}</div></section>
+    <section className="card"><h3>Vendedores cadastrados</h3><div className="table-wrap"><table><thead><tr><th>Vendedor</th><th>E-mail</th><th>Comissão</th><th>Status</th><th>Ações</th></tr></thead><tbody>{sellers.map(s => <tr key={s.id}><td><b>{s.name}</b><small>{s.phone || '-'}</small></td><td>{s.email}</td><td>{pct(s.commission_rate)}</td><td><span className={s.active ? 'badge ok' : 'badge off'}>{s.active ? 'Ativo' : 'Bloqueado'}</span></td><td className="actions"><button onClick={() => toggleSeller(s)}>{s.active ? 'Bloquear' : 'Ativar'}</button><button onClick={() => { const rate = prompt('Comissão em porcentagem. Ex: 15', Math.round(s.commission_rate * 100)); if (rate) saveProfile(s, { commission_rate: Number(rate) / 100 }) }}>Comissão</button><button onClick={() => setReset({ user_id: s.id, password: '' })}>Trocar senha</button></td></tr>)}</tbody></table>{!sellers.length && <p className="empty">Nenhum vendedor cadastrado.</p>}</div></section>
     {reset.user_id && <form className="card form" onSubmit={resetPassword}><div className="form-head"><h3>Trocar senha do vendedor</h3><button type="button" className="ghost" onClick={() => setReset({ user_id: '', password: '' })}>Fechar</button></div><label>Nova senha<input type="password" minLength="6" value={reset.password} onChange={e => setReset(r => ({ ...r, password: e.target.value }))} required /></label><button className="primary">Salvar nova senha</button></form>}
   </div>
 }

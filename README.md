@@ -108,3 +108,24 @@ Node.js 20 detected without native WebSocket support
 ```
 
 O frontend continua usando Supabase normalmente para login e dados. A chave `SUPABASE_SERVICE_ROLE_KEY` continua protegida somente no Netlify.
+
+## Atualização incluída
+
+- Vendedor pode alterar o status dos próprios leads diretamente na tabela.
+- Admin pode excluir leads pelo botão **Excluir lead**.
+- O arquivo `supabase/ATUALIZAR-BANCO.sql` reforça as permissões no banco sem apagar dados.
+
+## Atualização de responsividade e PWA
+
+Esta versão também corrige:
+
+- Menu lateral no celular/tablet agora fica fechado e abre pelo botão ☰.
+- Menu fecha automaticamente ao escolher uma página.
+- Fundo escuro ao abrir o menu no mobile.
+- Campos, cards e tabelas mais compactos para não ficarem grandes demais.
+- Layout melhorado para telas pequenas, notebooks e desktop.
+- PWA configurado com `manifest.webmanifest`, `sw.js` e ícones.
+- Ao instalar pelo navegador, o sistema abre em modo aplicativo quando suportado pelo Chrome/Edge.
+- Ícone do RN CRM incluído para instalação.
+
+Para o modo aplicativo funcionar, suba no Netlify, abra o site pelo Chrome ou Edge e use a opção **Instalar app** ou **Adicionar à tela inicial**. Se abrir como navegador, remova a instalação antiga e instale novamente após o novo deploy publicado.

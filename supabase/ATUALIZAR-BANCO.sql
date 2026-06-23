@@ -71,3 +71,43 @@ update public.leads set updated_at = now() where updated_at is null;
 
 -- Recarrega o cache de schema usado pela API do Supabase/PostgREST.
 notify pgrst, 'reload schema';
+
+-- Permissoes para status/exclusao de leads
+-- Vendedor pode alterar o status e dados dos proprios leads.
+-- Admin pode editar e excluir qualquer lead.
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.role = 'admin'
+      and p.active = true
+  );
+$$;
+
+alter table public.leads enable row level security;
+
+drop policy if exists leads_select on public.leads;
+drop policy if exists leads_insert on public.leads;
+drop policy if exists leads_update on public.leads;
+drop policy if exists leads_delete_admin on public.leads;
+
+create policy leads_select on public.leads
+for select using (public.is_admin() or vendedor_id = auth.uid());
+
+create policy leads_insert on public.leads
+for insert with check (public.is_admin() or vendedor_id = auth.uid());
+
+create policy leads_update on public.leads
+for update using (public.is_admin() or vendedor_id = auth.uid())
+with check (public.is_admin() or vendedor_id = auth.uid());
+
+create policy leads_delete_admin on public.leads
+for delete using (public.is_admin());
+
+notify pgrst, 'reload schema';

@@ -1,4 +1,4 @@
-RN CRM Vendas — versão NPM/React Clean
+RN CRM Vendas — versão NPM/React Clean Responsiva + PWA
 
 1. Suba no GitHub os arquivos desta pasta.
 2. Não suba: node_modules, dist, .env e package-lock.json.
@@ -15,15 +15,12 @@ RN CRM Vendas — versão NPM/React Clean
 7. Rode supabase/admin_setup.sql.
 8. Faça deploy no Netlify.
 
-Visual atualizado para padrão clean branco e profissional.
+Correções desta versão:
+- Visual branco, clean e mais profissional.
+- Menu responsivo: no celular/tablet ele fica fechado e abre pelo botão ☰.
+- Campos e cards mais compactos.
+- PWA com manifest, service worker e ícone do programa.
+- Vendedor altera status de lead.
+- Admin exclui lead.
 
-CORRECAO IMPORTANTE:
-Se aparecer erro falando que a coluna phone nao existe em profiles, rode no Supabase o arquivo:
-supabase/ATUALIZAR-BANCO.sql
-Depois refaça o teste de cadastro de vendedor.
-
-ATUALIZAÇÃO — EXCLUIR VENDEDOR
-- O admin agora tem o botão Excluir na tela Vendedores.
-- A exclusão remove o login do vendedor no Supabase Auth.
-- Para não perder histórico, os leads do vendedor excluído são transferidos para o administrador logado.
-- Após subir no GitHub/Netlify, faça um novo deploy para a função delete-seller ficar ativa.
+Se a instalação no computador ainda abrir como navegador, remova o atalho/app antigo e instale novamente após o deploy novo.
