@@ -1,0 +1,23 @@
+RN CRM Vendas - Já configurado com Supabase
+
+1) Suba estes arquivos no GitHub ou Netlify.
+2) No Netlify use:
+   Build command: deixar vazio
+   Publish directory: .
+   Base directory: deixar vazio
+
+3) No Supabase rode:
+   supabase/schema.sql
+
+4) Depois crie o usuário em Authentication > Users > Add user:
+   admin@rnvision.com.br
+   Senha: 123456
+
+5) Depois rode:
+   supabase/admin_setup.sql
+
+6) Abra o site e faça login:
+   admin@rnvision.com.br
+   123456
+
+Não suba node_modules, dist, package.json ou .env. Esta versão não usa npm.

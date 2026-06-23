@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RN CRM Vendas | RN Vision Pira</title>
+    <meta name="description" content="CRM interno para vendedores da RN Vision Pira." />
+    <link rel="icon" type="image/png" href="assets/logo-rn-vision-pira.png" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div id="toast" class="toast hidden"></div>
+
+    <div id="welcomeLoader" class="welcome-loader hidden">
+      <div class="loader-card">
+        <img src="assets/logo-rn-vision-pira.png" alt="RN Vision Pira" />
+        <div class="loader-ring"></div>
+        <h2>Bem-vindo ao RN CRM Vendas</h2>
+        <p>Carregando seu painel comercial...</p>
+      </div>
+    </div>
+
+    <main id="app"></main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
