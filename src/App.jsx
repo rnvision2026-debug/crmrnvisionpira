@@ -75,7 +75,7 @@ function Sidebar({ page, setPage, profile, onLogout }) {
 }
 
 function Layout({ page, setPage, profile, onLogout, title, children }) {
-  return <div className="app"><Sidebar page={page} setPage={setPage} profile={profile} onLogout={onLogout} /><main><header className="topbar"><div><h2>{title}</h2><p>{profile.role === 'admin' ? 'Controle completo da equipe comercial.' : 'Acompanhe seus leads, retornos e comissões.'}</p></div><span className="online">Supabase conectado</span></header>{children}</main></div>
+  return <div className="app"><Sidebar page={page} setPage={setPage} profile={profile} onLogout={onLogout} /><main><header className="topbar"><div><h2>{title}</h2><p>{profile.role === 'admin' ? 'Controle completo da equipe comercial.' : 'Acompanhe seus leads, retornos e comissões.'}</p></div><div className="top-actions"><span className="online">Supabase conectado</span><button className="logout-top" type="button" onClick={onLogout}>Sair do sistema</button></div></header>{children}</main></div>
 }
 
 function Stat({ label, value, hint }) {
@@ -259,8 +259,8 @@ function CommissionsPage({ leads, profiles }) {
   return <section className="card"><h3>Comissões do mês</h3><div className="table-wrap"><table><thead><tr><th>Vendedor</th><th>Vendas fechadas</th><th>Total vendido</th><th>Comissão</th><th>Bônus</th><th>Total a pagar</th></tr></thead><tbody>{sellers.map(s => { const closed = leads.filter(l => l.vendedor_id === s.id && l.status === 'fechado' && (l.closed_at || l.updated_at || '').slice(0, 7) === currentMonth()); const total = closed.reduce((a, l) => a + Number(l.proposal_value || 0), 0); const commission = total * Number(s.commission_rate || 0.15); const bonus = calcBonus(closed.length); return <tr key={s.id}><td><b>{s.name}</b><small>{s.email}</small></td><td>{closed.length}</td><td>{money(total)}</td><td>{money(commission)}</td><td>{money(bonus)}</td><td><b>{money(commission + bonus)}</b></td></tr> })}</tbody></table></div></section>
 }
 
-function ConfigPage({ profile }) {
-  return <div className="grid gap"><section className="card"><h3>Configurações</h3><p>O sistema está conectado ao Supabase e hospedado para rodar via Netlify.</p><div className="info-grid"><div><small>Usuário</small><b>{profile.name}</b></div><div><small>Perfil</small><b>{profile.role}</b></div><div><small>Status</small><b>{profile.active ? 'Ativo' : 'Bloqueado'}</b></div></div></section><section className="card"><h3>Variáveis necessárias no Netlify</h3><pre>VITE_SUPABASE_URL\nVITE_SUPABASE_ANON_KEY\nSUPABASE_SERVICE_ROLE_KEY</pre><p className="muted">A SERVICE_ROLE fica somente no Netlify. Não coloque essa chave no GitHub.</p></section></div>
+function ConfigPage({ profile, onLogout }) {
+  return <div className="grid gap"><section className="card"><div className="form-head"><div><h3>Configurações</h3><p>O sistema está conectado ao Supabase e hospedado para rodar via Netlify.</p></div><button className="logout-top" type="button" onClick={onLogout}>Sair do sistema</button></div><div className="info-grid"><div><small>Usuário</small><b>{profile.name}</b></div><div><small>Perfil</small><b>{profile.role}</b></div><div><small>Status</small><b>{profile.active ? 'Ativo' : 'Bloqueado'}</b></div></div></section><section className="card"><h3>Variáveis necessárias no Netlify</h3><pre>VITE_SUPABASE_URL\nVITE_SUPABASE_ANON_KEY\nSUPABASE_SERVICE_ROLE_KEY</pre><p className="muted">A SERVICE_ROLE fica somente no Netlify. Não coloque essa chave no GitHub.</p></section></div>
 }
 
 function App() {
@@ -345,7 +345,7 @@ function App() {
       {page === 'servicos' && <ServicesPage profile={profile} services={services} reload={() => loadData(profile)} notify={notify} />}
       {page === 'comissoes' && <CommissionsPage leads={visibleLeads} profiles={profiles} />}
       {page === 'vendedores' && profile.role === 'admin' && <SellersPage profiles={profiles} reload={() => loadData(profile)} notify={notify} session={session} />}
-      {page === 'config' && <ConfigPage profile={profile} />}
+      {page === 'config' && <ConfigPage profile={profile} onLogout={logout} />}
     </Layout>
     <Toast {...toast} onClose={() => setToast({ message: '', type: '' })} />
   </>

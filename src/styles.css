@@ -246,6 +246,20 @@ main { padding: 28px; min-width: 0; }
 .topbar p { margin: 5px 0 0; color: var(--muted); }
 .online { background: #ecfdf3; color: #047857; border: 1px solid #abefc6; padding: 9px 12px; border-radius: 999px; font-weight: 850; white-space: nowrap; font-size: 13px; }
 
+.top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.logout-top {
+  border: 1px solid #fecdca;
+  background: #fff;
+  color: var(--red);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 900;
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+  transition: background .16s ease, border-color .16s ease, transform .16s ease;
+}
+.logout-top:hover { background: #fff5f5; border-color: #fda29b; transform: translateY(-1px); }
+
 .grid { display: grid; }
 .gap { gap: 18px; }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }

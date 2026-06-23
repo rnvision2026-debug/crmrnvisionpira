@@ -62,6 +62,62 @@ create table if not exists public.activities (
   created_at timestamptz not null default now()
 );
 
+-- Atualizacao segura para bancos ja existentes.
+-- O create table if not exists nao adiciona colunas novas em tabelas antigas.
+-- Por isso estes ALTER TABLE garantem compatibilidade sem apagar dados.
+alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists active boolean default true;
+alter table public.profiles add column if not exists commission_rate numeric(5,4) default 0.1500;
+alter table public.profiles add column if not exists role text default 'vendedor';
+alter table public.profiles add column if not exists created_at timestamptz default now();
+alter table public.profiles add column if not exists updated_at timestamptz default now();
+update public.profiles set active = true where active is null;
+update public.profiles set commission_rate = 0.1500 where commission_rate is null;
+update public.profiles set role = 'vendedor' where role is null;
+update public.profiles set created_at = now() where created_at is null;
+update public.profiles set updated_at = now() where updated_at is null;
+
+alter table public.services add column if not exists category text default 'Sites';
+alter table public.services add column if not exists description text;
+alter table public.services add column if not exists development_price numeric(12,2) default 0;
+alter table public.services add column if not exists setup_integration_price numeric(12,2) default 0;
+alter table public.services add column if not exists monthly_price numeric(12,2) default 0;
+alter table public.services add column if not exists payment_terms text;
+alter table public.services add column if not exists delivery_time text;
+alter table public.services add column if not exists sales_arguments text;
+alter table public.services add column if not exists active boolean default true;
+alter table public.services add column if not exists sort_order integer default 0;
+alter table public.services add column if not exists created_at timestamptz default now();
+alter table public.services add column if not exists updated_at timestamptz default now();
+update public.services set category = 'Sites' where category is null;
+update public.services set development_price = 0 where development_price is null;
+update public.services set setup_integration_price = 0 where setup_integration_price is null;
+update public.services set monthly_price = 0 where monthly_price is null;
+update public.services set active = true where active is null;
+update public.services set sort_order = 0 where sort_order is null;
+update public.services set created_at = now() where created_at is null;
+update public.services set updated_at = now() where updated_at is null;
+
+alter table public.leads add column if not exists service_id uuid references public.services(id) on delete set null;
+alter table public.leads add column if not exists company_name text;
+alter table public.leads add column if not exists whatsapp text;
+alter table public.leads add column if not exists email text;
+alter table public.leads add column if not exists origin text default 'WhatsApp';
+alter table public.leads add column if not exists proposal_value numeric(12,2) default 0;
+alter table public.leads add column if not exists notes text;
+alter table public.leads add column if not exists next_contact_at date;
+alter table public.leads add column if not exists closed_at timestamptz;
+alter table public.leads add column if not exists loss_reason text;
+alter table public.leads add column if not exists created_at timestamptz default now();
+alter table public.leads add column if not exists updated_at timestamptz default now();
+update public.leads set origin = 'WhatsApp' where origin is null;
+update public.leads set proposal_value = 0 where proposal_value is null;
+update public.leads set created_at = now() where created_at is null;
+update public.leads set updated_at = now() where updated_at is null;
+
+notify pgrst, 'reload schema';
+
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql

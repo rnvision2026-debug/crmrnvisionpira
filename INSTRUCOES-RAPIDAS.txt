@@ -16,3 +16,8 @@ RN CRM Vendas — versão NPM/React Clean
 8. Faça deploy no Netlify.
 
 Visual atualizado para padrão clean branco e profissional.
+
+CORRECAO IMPORTANTE:
+Se aparecer erro falando que a coluna phone nao existe em profiles, rode no Supabase o arquivo:
+supabase/ATUALIZAR-BANCO.sql
+Depois refaça o teste de cadastro de vendedor.
