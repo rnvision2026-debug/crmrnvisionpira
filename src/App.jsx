@@ -247,9 +247,22 @@ function SellersPage({ profiles, reload, notify, session }) {
     if (!res.ok) return notify(data.error || 'Erro ao trocar senha.', 'danger')
     setReset({ user_id: '', password: '' }); notify('Senha alterada.', 'ok')
   }
+  async function deleteSeller(seller) {
+    const ok = confirm(`Excluir o vendedor ${seller.name}?\n\nO login dele será removido do Supabase Auth. Para não perder histórico, os leads desse vendedor serão transferidos para o administrador.`)
+    if (!ok) return
+    const res = await fetch('/.netlify/functions/delete-seller', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ user_id: seller.id })
+    })
+    const data = await res.json()
+    if (!res.ok) return notify(data.error || 'Erro ao excluir vendedor.', 'danger')
+    notify(data.reassigned_leads ? `Vendedor excluído. ${data.reassigned_leads} lead(s) foram transferidos para o administrador.` : 'Vendedor excluído.', 'ok')
+    reload()
+  }
   return <div className="grid gap">
     <form className="card form" onSubmit={createSeller}><h3>Cadastrar vendedor direto no CRM</h3><p className="muted">O sistema cria o usuário no Supabase Auth e o perfil de vendedor automaticamente.</p><div className="form-grid"><label>Nome<input value={form.name} onChange={e => set('name', e.target.value)} required /></label><label>E-mail<input type="email" value={form.email} onChange={e => set('email', e.target.value)} required /></label><label>Senha inicial<input type="password" value={form.password} onChange={e => set('password', e.target.value)} minLength="6" required /></label><label>WhatsApp<input value={form.phone} onChange={e => set('phone', e.target.value)} /></label><label>Comissão<select value={form.commission_rate} onChange={e => set('commission_rate', Number(e.target.value))}><option value="0.15">15%</option><option value="0.10">10%</option><option value="0.20">20%</option></select></label></div><button className="primary">Criar vendedor com login</button></form>
-    <section className="card"><h3>Vendedores cadastrados</h3><div className="table-wrap"><table><thead><tr><th>Vendedor</th><th>E-mail</th><th>Comissão</th><th>Status</th><th>Ações</th></tr></thead><tbody>{sellers.map(s => <tr key={s.id}><td><b>{s.name}</b><small>{s.phone || '-'}</small></td><td>{s.email}</td><td>{pct(s.commission_rate)}</td><td><span className={s.active ? 'badge ok' : 'badge off'}>{s.active ? 'Ativo' : 'Bloqueado'}</span></td><td className="actions"><button onClick={() => toggleSeller(s)}>{s.active ? 'Bloquear' : 'Ativar'}</button><button onClick={() => { const rate = prompt('Comissão em porcentagem. Ex: 15', Math.round(s.commission_rate * 100)); if (rate) saveProfile(s, { commission_rate: Number(rate) / 100 }) }}>Comissão</button><button onClick={() => setReset({ user_id: s.id, password: '' })}>Trocar senha</button></td></tr>)}</tbody></table>{!sellers.length && <p className="empty">Nenhum vendedor cadastrado.</p>}</div></section>
+    <section className="card"><h3>Vendedores cadastrados</h3><div className="table-wrap"><table><thead><tr><th>Vendedor</th><th>E-mail</th><th>Comissão</th><th>Status</th><th>Ações</th></tr></thead><tbody>{sellers.map(s => <tr key={s.id}><td><b>{s.name}</b><small>{s.phone || '-'}</small></td><td>{s.email}</td><td>{pct(s.commission_rate)}</td><td><span className={s.active ? 'badge ok' : 'badge off'}>{s.active ? 'Ativo' : 'Bloqueado'}</span></td><td className="actions"><button onClick={() => toggleSeller(s)}>{s.active ? 'Bloquear' : 'Ativar'}</button><button onClick={() => { const rate = prompt('Comissão em porcentagem. Ex: 15', Math.round(s.commission_rate * 100)); if (rate) saveProfile(s, { commission_rate: Number(rate) / 100 }) }}>Comissão</button><button onClick={() => setReset({ user_id: s.id, password: '' })}>Trocar senha</button><button className="danger" onClick={() => deleteSeller(s)}>Excluir</button></td></tr>)}</tbody></table>{!sellers.length && <p className="empty">Nenhum vendedor cadastrado.</p>}</div></section>
     {reset.user_id && <form className="card form" onSubmit={resetPassword}><div className="form-head"><h3>Trocar senha do vendedor</h3><button type="button" className="ghost" onClick={() => setReset({ user_id: '', password: '' })}>Fechar</button></div><label>Nova senha<input type="password" minLength="6" value={reset.password} onChange={e => setReset(r => ({ ...r, password: e.target.value }))} required /></label><button className="primary">Salvar nova senha</button></form>}
   </div>
 }

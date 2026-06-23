@@ -21,3 +21,9 @@ CORRECAO IMPORTANTE:
 Se aparecer erro falando que a coluna phone nao existe em profiles, rode no Supabase o arquivo:
 supabase/ATUALIZAR-BANCO.sql
 Depois refaça o teste de cadastro de vendedor.
+
+ATUALIZAÇÃO — EXCLUIR VENDEDOR
+- O admin agora tem o botão Excluir na tela Vendedores.
+- A exclusão remove o login do vendedor no Supabase Auth.
+- Para não perder histórico, os leads do vendedor excluído são transferidos para o administrador logado.
+- Após subir no GitHub/Netlify, faça um novo deploy para a função delete-seller ficar ativa.

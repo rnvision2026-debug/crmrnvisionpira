@@ -26,7 +26,7 @@ function extractError(data, fallback) {
   return data.message || data.msg || data.error_description || data.error || fallback
 }
 
-async function request(path, { method = 'GET', body, token, prefer, admin = true } = {}) {
+export async function request(path, { method = 'GET', body, token, prefer, admin = true } = {}) {
   const { supabaseUrl, anonKey, serviceKey } = readEnv()
   const apiKey = admin ? serviceKey : (anonKey || serviceKey)
   const authorization = token ? `Bearer ${token}` : `Bearer ${serviceKey}`
@@ -102,4 +102,34 @@ export async function upsertProfile(profile) {
     body: profile
   })
   return Array.isArray(data) ? data[0] : data
+}
+
+
+export async function getProfileById(userId) {
+  const data = await request(`/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,name,email,role,active`, { admin: true })
+  return Array.isArray(data) ? data[0] : data
+}
+
+export async function reassignSellerLeads(fromUserId, toUserId) {
+  return request(`/rest/v1/leads?vendedor_id=eq.${encodeURIComponent(fromUserId)}`, {
+    method: 'PATCH',
+    admin: true,
+    prefer: 'return=representation',
+    body: { vendedor_id: toUserId }
+  })
+}
+
+export async function deleteProfile(userId) {
+  return request(`/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    admin: true,
+    prefer: 'return=representation'
+  })
+}
+
+export async function deleteAuthUser(userId) {
+  return request(`/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    admin: true
+  })
 }
