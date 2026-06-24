@@ -18,6 +18,8 @@ const currentMonth = () => new Date().toISOString().slice(0, 7)
 const cleanPhone = (phone = '') => phone.replace(/\D/g, '')
 const initialValue = (service) => Number(service?.development_price || 0) + Number(service?.setup_integration_price || 0)
 const calcBonus = (count) => count >= 15 ? 1000 : count >= 10 ? 500 : 0
+const formatDateTime = (value) => value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'
+const deviceLabel = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ? 'Celular' : 'Computador'
 
 const blankLead = {
   client_name: '', company_name: '', whatsapp: '', email: '', origin: 'WhatsApp',
@@ -64,7 +66,7 @@ function Login({ onLogin, loading, error }) {
 function Sidebar({ page, setPage, profile, onLogout, open, onClose }) {
   const items = [
     ['dashboard', 'Dashboard', '📊'], ['leads', 'Leads', '👥'], ['servicos', 'Serviços e valores', '💼'], ['comissoes', 'Comissões', '💰'],
-    ...(profile.role === 'admin' ? [['vendedores', 'Vendedores', '🧑‍💼']] : []), ['config', 'Configurações', '⚙️']
+    ...(profile.role === 'admin' ? [['vendedores', 'Vendedores', '🧑‍💼'], ['login_logs', 'Registros de login', '🕘']] : []), ['config', 'Configurações', '⚙️']
   ]
   function navigate(id) {
     setPage(id)
@@ -81,7 +83,7 @@ function Sidebar({ page, setPage, profile, onLogout, open, onClose }) {
   </aside>
 }
 
-function Layout({ page, setPage, profile, onLogout, title, children }) {
+function Layout({ page, setPage, profile, onLogout, onInstallApp, title, children }) {
   const [menuOpen, setMenuOpen] = useState(false)
   useEffect(() => {
     document.body.classList.toggle('menu-open', menuOpen)
@@ -91,7 +93,7 @@ function Layout({ page, setPage, profile, onLogout, title, children }) {
     <button type="button" className={`menu-backdrop ${menuOpen ? 'show' : ''}`} onClick={() => setMenuOpen(false)} aria-label="Fechar menu" />
     <Sidebar page={page} setPage={setPage} profile={profile} onLogout={onLogout} open={menuOpen} onClose={() => setMenuOpen(false)} />
     <main>
-      <header className="topbar"><div className="top-title"><button type="button" className="menu-toggle" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">☰</button><div><h2>{title}</h2><p>{profile.role === 'admin' ? 'Controle completo da equipe comercial.' : 'Acompanhe seus leads, retornos e comissões.'}</p></div></div><div className="top-actions"><span className="online">Supabase conectado</span><button className="logout-top" type="button" onClick={onLogout}>Sair do sistema</button></div></header>
+      <header className="topbar"><div className="top-title"><button type="button" className="menu-toggle" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">☰</button><div><h2>{title}</h2><p>{profile.role === 'admin' ? 'Controle completo da equipe comercial.' : 'Acompanhe seus leads, retornos e comissões.'}</p></div></div><div className="top-actions"><span className="online">Supabase conectado</span><button className="ghost install-top" type="button" onClick={onInstallApp}>Instalar app</button><button className="logout-top" type="button" onClick={onLogout}>Sair</button></div></header>
       {children}
     </main>
   </div>
@@ -205,7 +207,9 @@ function LeadsPage({ profile, profiles, services, leads, reload, notify }) {
   return <div className="grid gap">
     <section className="toolbar"><input placeholder="Buscar lead..." value={search} onChange={e => setSearch(e.target.value)} /><select value={status} onChange={e => setStatus(e.target.value)}><option value="todos">Todos os status</option>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select><button className="primary" onClick={() => { setEditing(null); setShow(true) }}>+ Novo lead</button></section>
     {show && <LeadForm profile={profile} profiles={profiles} services={services} editing={editing} onCancel={() => { setShow(false); setEditing(null) }} onSave={saveLead} />}
-    <section className="card"><div className="table-wrap"><table><thead><tr><th>Cliente</th><th>Serviço</th><th>Status</th><th>Valor</th><th>Retorno</th><th>Vendedor</th><th>Ações</th></tr></thead><tbody>{filtered.map(l => { const seller = profiles.find(p => p.id === l.vendedor_id); const service = services.find(s => s.id === l.service_id); return <tr key={l.id}><td><b>{l.client_name}</b><small>{l.company_name || l.whatsapp || '-'}</small></td><td>{service?.name || '-'}</td><td><select className={`status-select ${l.status}`} value={l.status} onChange={(e) => updateLeadStatus(l, e.target.value)}>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></td><td><b>{money(l.proposal_value)}</b></td><td>{l.next_contact_at || '-'}</td><td>{seller?.name || '-'}</td><td className="actions"><button onClick={() => copyLead(l)}>Copiar</button>{l.whatsapp && <a target="_blank" rel="noreferrer" href={`https://wa.me/55${cleanPhone(l.whatsapp)}`}>WhatsApp</a>}<button onClick={() => { setEditing(l); setShow(true) }}>Editar</button>{profile.role === 'admin' && <button className="danger" onClick={() => removeLead(l.id)}>Excluir lead</button>}</td></tr> })}</tbody></table>{!filtered.length && <p className="empty">Nenhum lead encontrado.</p>}</div></section>
+    <section className="card leads-card"><div className="table-wrap desktop-table"><table><thead><tr><th>Cliente</th><th>Serviço</th><th>Status</th><th>Valor</th><th>Retorno</th><th>Vendedor</th><th>Ações</th></tr></thead><tbody>{filtered.map(l => { const seller = profiles.find(p => p.id === l.vendedor_id); const service = services.find(s => s.id === l.service_id); return <tr key={l.id}><td><b>{l.client_name}</b><small>{l.company_name || l.whatsapp || '-'}</small></td><td>{service?.name || '-'}</td><td><select className={`status-select ${l.status}`} value={l.status} onChange={(e) => updateLeadStatus(l, e.target.value)}>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></td><td><b>{money(l.proposal_value)}</b></td><td>{l.next_contact_at || '-'}</td><td>{seller?.name || '-'}</td><td className="actions"><button onClick={() => copyLead(l)}>Copiar</button>{l.whatsapp && <a target="_blank" rel="noreferrer" href={`https://wa.me/55${cleanPhone(l.whatsapp)}`}>WhatsApp</a>}<button onClick={() => { setEditing(l); setShow(true) }}>Editar</button>{profile.role === 'admin' && <button className="danger" onClick={() => removeLead(l.id)}>Excluir lead</button>}</td></tr> })}</tbody></table>{!filtered.length && <p className="empty">Nenhum lead encontrado.</p>}</div>
+      <div className="mobile-list">{filtered.map(l => { const seller = profiles.find(p => p.id === l.vendedor_id); const service = services.find(s => s.id === l.service_id); return <article key={l.id} className="mobile-lead"><div className="mobile-lead-head"><div><b>{l.client_name}</b><small>{l.company_name || l.whatsapp || 'Sem empresa'}</small></div><strong>{money(l.proposal_value)}</strong></div><div className="mobile-meta"><span>{service?.name || 'Sem serviço'}</span><span>Retorno: {l.next_contact_at || '-'}</span><span>Vendedor: {seller?.name || '-'}</span></div><select className={`status-select ${l.status}`} value={l.status} onChange={(e) => updateLeadStatus(l, e.target.value)}>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select><div className="actions"><button onClick={() => copyLead(l)}>Copiar</button>{l.whatsapp && <a target="_blank" rel="noreferrer" href={`https://wa.me/55${cleanPhone(l.whatsapp)}`}>WhatsApp</a>}<button onClick={() => { setEditing(l); setShow(true) }}>Editar</button>{profile.role === 'admin' && <button className="danger" onClick={() => removeLead(l.id)}>Excluir</button>}</div></article> })}{!filtered.length && <p className="empty">Nenhum lead encontrado.</p>}</div>
+    </section>
   </div>
 }
 
@@ -289,8 +293,51 @@ function CommissionsPage({ leads, profiles }) {
   return <section className="card"><h3>Comissões do mês</h3><div className="table-wrap"><table><thead><tr><th>Vendedor</th><th>Vendas fechadas</th><th>Total vendido</th><th>Comissão</th><th>Bônus</th><th>Total a pagar</th></tr></thead><tbody>{sellers.map(s => { const closed = leads.filter(l => l.vendedor_id === s.id && l.status === 'fechado' && (l.closed_at || l.updated_at || '').slice(0, 7) === currentMonth()); const total = closed.reduce((a, l) => a + Number(l.proposal_value || 0), 0); const commission = total * Number(s.commission_rate || 0.15); const bonus = calcBonus(closed.length); return <tr key={s.id}><td><b>{s.name}</b><small>{s.email}</small></td><td>{closed.length}</td><td>{money(total)}</td><td>{money(commission)}</td><td>{money(bonus)}</td><td><b>{money(commission + bonus)}</b></td></tr> })}</tbody></table></div></section>
 }
 
-function ConfigPage({ profile, onLogout }) {
-  return <div className="grid gap"><section className="card"><div className="form-head"><div><h3>Configurações</h3><p>O sistema está conectado ao Supabase e hospedado para rodar via Netlify.</p></div><button className="logout-top" type="button" onClick={onLogout}>Sair do sistema</button></div><div className="info-grid"><div><small>Usuário</small><b>{profile.name}</b></div><div><small>Perfil</small><b>{profile.role}</b></div><div><small>Status</small><b>{profile.active ? 'Ativo' : 'Bloqueado'}</b></div></div></section><section className="card"><h3>Variáveis necessárias no Netlify</h3><pre>VITE_SUPABASE_URL\nVITE_SUPABASE_ANON_KEY\nSUPABASE_SERVICE_ROLE_KEY</pre><p className="muted">A SERVICE_ROLE fica somente no Netlify. Não coloque essa chave no GitHub.</p></section></div>
+
+function LoginLogsPage({ loginLogs, profiles, reload }) {
+  const [sellerId, setSellerId] = useState('todos')
+  const [period, setPeriod] = useState('30')
+  const sellers = profiles.filter(p => p.role === 'vendedor')
+  const now = Date.now()
+  const filtered = loginLogs
+    .filter(log => log.role === 'vendedor' || sellers.some(s => s.id === log.user_id || s.email === log.email))
+    .filter(log => sellerId === 'todos' || log.user_id === sellerId)
+    .filter(log => {
+      if (period === 'todos') return true
+      const days = Number(period)
+      return new Date(log.created_at).getTime() >= now - days * 24 * 60 * 60 * 1000
+    })
+  const today = new Date().toISOString().slice(0, 10)
+  const todayCount = filtered.filter(log => (log.created_at || '').slice(0, 10) === today).length
+  const uniqueSellers = new Set(filtered.map(log => log.user_id || log.email)).size
+
+  return <div className="grid gap">
+    <div className="stats login-stats"><Stat label="Logins filtrados" value={filtered.length} hint="Registros encontrados" /><Stat label="Hoje" value={todayCount} hint="Acessos no dia" /><Stat label="Vendedores" value={uniqueSellers} hint="Com login registrado" /><Stat label="Último acesso" value={filtered[0] ? formatDateTime(filtered[0].created_at) : '-'} hint="Registro mais recente" /></div>
+    <section className="toolbar">
+      <select value={sellerId} onChange={e => setSellerId(e.target.value)}>
+        <option value="todos">Todos os vendedores</option>
+        {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+      </select>
+      <select value={period} onChange={e => setPeriod(e.target.value)}>
+        <option value="7">Últimos 7 dias</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="todos">Todos os registros</option>
+      </select>
+      <button className="ghost" type="button" onClick={reload}>Atualizar</button>
+    </section>
+    <section className="card leads-card">
+      <div className="form-head"><div><h3>Registros de login dos vendedores</h3><p className="muted">Acompanhe data, hora, e-mail e dispositivo usado no acesso.</p></div></div>
+      <div className="table-wrap desktop-table"><table><thead><tr><th>Vendedor</th><th>E-mail</th><th>Data e hora</th><th>Dispositivo</th><th>Navegador</th></tr></thead><tbody>{filtered.map(log => <tr key={log.id}><td><b>{log.name || '-'}</b><small>{log.role === 'admin' ? 'Administrador' : 'Vendedor'}</small></td><td>{log.email}</td><td><b>{formatDateTime(log.created_at)}</b></td><td>{log.device || '-'}</td><td><small>{log.user_agent || '-'}</small></td></tr>)}</tbody></table>{!filtered.length && <p className="empty">Nenhum registro de login encontrado.</p>}</div>
+      <div className="mobile-list">{filtered.map(log => <article key={log.id} className="mobile-lead"><div className="mobile-lead-head"><div><b>{log.name || log.email}</b><small>{log.email}</small></div><strong>{formatDateTime(log.created_at)}</strong></div><div className="mobile-meta"><span>Perfil: {log.role === 'admin' ? 'Administrador' : 'Vendedor'}</span><span>Dispositivo: {log.device || '-'}</span><span>Navegador: {log.user_agent || '-'}</span></div></article>)}{!filtered.length && <p className="empty">Nenhum registro de login encontrado.</p>}</div>
+    </section>
+  </div>
+}
+
+function ConfigPage({ profile, onLogout, onInstallApp, isStandalone }) {
+  return <div className="grid gap"><section className="card"><div className="form-head"><div><h3>Configurações</h3><p>O sistema está conectado ao Supabase e hospedado para rodar via Netlify.</p></div><button className="logout-top" type="button" onClick={onLogout}>Sair do sistema</button></div><div className="info-grid"><div><small>Usuário</small><b>{profile.name}</b></div><div><small>Perfil</small><b>{profile.role}</b></div><div><small>Status</small><b>{profile.active ? 'Ativo' : 'Bloqueado'}</b></div></div></section><section className="card pwa-card"><h3>Instalar como aplicativo</h3><p className="muted">Para abrir como programa no computador, use este botão ou o botão de instalação do Chrome/Edge. Depois remova qualquer atalho antigo e instale novamente.</p><button className="primary" type="button" onClick={onInstallApp}>{isStandalone ? 'Aplicativo já instalado' : 'Instalar aplicativo'}</button></section><section className="card"><h3>Variáveis necessárias no Netlify</h3><pre>VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY</pre><p className="muted">A SERVICE_ROLE fica somente no Netlify. Não coloque essa chave no GitHub.</p></section></div>
 }
 
 function App() {
@@ -299,14 +346,46 @@ function App() {
   const [profiles, setProfiles] = useState([])
   const [services, setServices] = useState([])
   const [leads, setLeads] = useState([])
+  const [loginLogs, setLoginLogs] = useState([])
   const [page, setPage] = useState('dashboard')
   const [loading, setLoading] = useState(true)
   const [loginLoading, setLoginLoading] = useState(false)
   const [error, setError] = useState('')
   const [welcome, setWelcome] = useState(false)
   const [toast, setToast] = useState({ message: '', type: '' })
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const [isStandalone, setIsStandalone] = useState(() => window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true)
 
   const notify = (message, type = '') => { setToast({ message, type }); setTimeout(() => setToast({ message: '', type: '' }), 4500) }
+
+  useEffect(() => {
+    const onBeforeInstall = (event) => {
+      event.preventDefault()
+      setInstallPrompt(event)
+    }
+    const onInstalled = () => {
+      setInstallPrompt(null)
+      setIsStandalone(true)
+      notify('Aplicativo instalado com sucesso.', 'ok')
+    }
+    window.addEventListener('beforeinstallprompt', onBeforeInstall)
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
+  }, [])
+
+  async function installApp() {
+    if (isStandalone) return notify('O sistema já está aberto como aplicativo.', 'ok')
+    if (installPrompt) {
+      installPrompt.prompt()
+      const result = await installPrompt.userChoice
+      if (result.outcome === 'accepted') setInstallPrompt(null)
+      return
+    }
+    notify('No Chrome ou Edge, clique no ícone de instalação na barra de endereço e escolha Instalar aplicativo.', 'danger')
+  }
 
   async function loadProfile(userId) {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
@@ -318,14 +397,18 @@ function App() {
 
   async function loadData(currentProfile = profile) {
     if (!currentProfile) return
-    const [profilesRes, servicesRes, leadsRes] = await Promise.all([
+    const [profilesRes, servicesRes, leadsRes, loginLogsRes] = await Promise.all([
       supabase.from('profiles').select('*').order('created_at', { ascending: false }),
       supabase.from('services').select('*').order('sort_order', { ascending: true }),
-      supabase.from('leads').select('*').order('created_at', { ascending: false })
+      supabase.from('leads').select('*').order('created_at', { ascending: false }),
+      currentProfile.role === 'admin'
+        ? supabase.from('login_logs').select('*').order('created_at', { ascending: false }).limit(500)
+        : Promise.resolve({ data: [], error: null })
     ])
     if (profilesRes.error) notify(profilesRes.error.message, 'danger'); else setProfiles(profilesRes.data || [])
     if (servicesRes.error) notify(servicesRes.error.message, 'danger'); else setServices(servicesRes.data || [])
     if (leadsRes.error) notify(leadsRes.error.message, 'danger'); else setLeads(leadsRes.data || [])
+    if (loginLogsRes.error && currentProfile.role === 'admin') notify(loginLogsRes.error.message, 'danger'); else setLoginLogs(loginLogsRes.data || [])
   }
 
   useEffect(() => {
@@ -344,6 +427,21 @@ function App() {
     return () => listener.subscription.unsubscribe()
   }, [])
 
+  async function registerLogin(currentProfile) {
+    try {
+      await supabase.from('login_logs').insert({
+        user_id: currentProfile.id,
+        email: currentProfile.email,
+        name: currentProfile.name,
+        role: currentProfile.role,
+        device: deviceLabel(),
+        user_agent: navigator.userAgent || ''
+      })
+    } catch (_) {
+      // Não bloqueia o login caso o banco ainda não tenha sido atualizado.
+    }
+  }
+
   async function login(email, password) {
     setLoginLoading(true); setError('')
     try {
@@ -352,6 +450,7 @@ function App() {
       if (error) throw error
       setSession(data.session)
       const p = await loadProfile(data.user.id)
+      await registerLogin(p)
       setWelcome(true)
       await loadData(p)
       setTimeout(() => setWelcome(false), 1200)
@@ -359,23 +458,24 @@ function App() {
     finally { setLoginLoading(false) }
   }
 
-  async function logout() { await supabase.auth.signOut(); setSession(null); setProfile(null); setProfiles([]); setLeads([]) }
+  async function logout() { await supabase.auth.signOut(); setSession(null); setProfile(null); setProfiles([]); setLeads([]); setLoginLogs([]) }
 
   const visibleLeads = useMemo(() => leads, [leads])
-  const titles = { dashboard: 'Dashboard', leads: 'Leads / Clientes', servicos: 'Serviços e valores', comissoes: 'Comissões', vendedores: 'Vendedores', config: 'Configurações' }
+  const titles = { dashboard: 'Dashboard', leads: 'Leads / Clientes', servicos: 'Serviços e valores', comissoes: 'Comissões', vendedores: 'Vendedores', login_logs: 'Registros de login', config: 'Configurações' }
 
   if (loading) return <Welcome />
   if (!session || !profile) return <><Login onLogin={login} loading={loginLoading} error={error} /><Toast {...toast} onClose={() => setToast({ message: '', type: '' })} /></>
   if (welcome) return <Welcome profile={profile} />
 
   return <>
-    <Layout page={page} setPage={setPage} profile={profile} onLogout={logout} title={titles[page] || 'RN CRM Vendas'}>
+    <Layout page={page} setPage={setPage} profile={profile} onLogout={logout} onInstallApp={installApp} title={titles[page] || 'RN CRM Vendas'}>
       {page === 'dashboard' && <Dashboard leads={visibleLeads} profiles={profiles} profile={profile} />}
       {page === 'leads' && <LeadsPage profile={profile} profiles={profiles} services={services} leads={visibleLeads} reload={() => loadData(profile)} notify={notify} />}
       {page === 'servicos' && <ServicesPage profile={profile} services={services} reload={() => loadData(profile)} notify={notify} />}
       {page === 'comissoes' && <CommissionsPage leads={visibleLeads} profiles={profiles} />}
       {page === 'vendedores' && profile.role === 'admin' && <SellersPage profiles={profiles} reload={() => loadData(profile)} notify={notify} session={session} />}
-      {page === 'config' && <ConfigPage profile={profile} onLogout={logout} />}
+      {page === 'login_logs' && profile.role === 'admin' && <LoginLogsPage loginLogs={loginLogs} profiles={profiles} reload={() => loadData(profile)} />}
+      {page === 'config' && <ConfigPage profile={profile} onLogout={logout} onInstallApp={installApp} isStandalone={isStandalone} />}
     </Layout>
     <Toast {...toast} onClose={() => setToast({ message: '', type: '' })} />
   </>

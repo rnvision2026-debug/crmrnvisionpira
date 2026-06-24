@@ -111,3 +111,42 @@ create policy leads_delete_admin on public.leads
 for delete using (public.is_admin());
 
 notify pgrst, 'reload schema';
+
+
+-- Registros de login dos vendedores
+create table if not exists public.login_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete set null,
+  email text not null,
+  name text,
+  role text,
+  device text,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.login_logs add column if not exists user_id uuid references public.profiles(id) on delete set null;
+alter table public.login_logs add column if not exists email text;
+alter table public.login_logs add column if not exists name text;
+alter table public.login_logs add column if not exists role text;
+alter table public.login_logs add column if not exists device text;
+alter table public.login_logs add column if not exists user_agent text;
+alter table public.login_logs add column if not exists created_at timestamptz default now();
+update public.login_logs set created_at = now() where created_at is null;
+
+alter table public.login_logs enable row level security;
+
+drop policy if exists login_logs_select_admin on public.login_logs;
+drop policy if exists login_logs_insert_self on public.login_logs;
+drop policy if exists login_logs_delete_admin on public.login_logs;
+
+create policy login_logs_select_admin on public.login_logs
+for select using (public.is_admin());
+
+create policy login_logs_insert_self on public.login_logs
+for insert with check (user_id = auth.uid());
+
+create policy login_logs_delete_admin on public.login_logs
+for delete using (public.is_admin());
+
+notify pgrst, 'reload schema';

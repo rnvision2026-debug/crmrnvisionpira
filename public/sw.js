@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rn-crm-vendas-v3';
+const CACHE_NAME = 'rn-crm-vendas-v4';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/logo-rn-vision-pira.png', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {

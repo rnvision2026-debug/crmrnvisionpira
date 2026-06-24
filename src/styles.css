@@ -417,3 +417,57 @@ pre { white-space: pre-wrap; background: #101828; color: #dbeafe; padding: 16px;
   .toast { left: 14px; right: 14px; bottom: 14px; max-width: none; }
   table { min-width: 760px; }
 }
+
+/* Ajustes finais de responsividade e PWA */
+html, body, #root { width: 100%; max-width: 100%; overflow-x: hidden; }
+.app, main, .grid, .card, .toolbar, .topbar { min-width: 0; }
+.mobile-list { display: none; }
+.install-top { white-space: nowrap; }
+.leads-card { overflow: hidden; }
+
+@media (max-width: 760px) {
+  :root { --radius: 14px; }
+  body { background: #f6f8fc; }
+  main { width: 100%; padding: 12px; }
+  .topbar { padding: 12px; margin-bottom: 12px; border-radius: 16px; }
+  .top-title { align-items: center; gap: 10px; }
+  .topbar h2 { font-size: 22px; line-height: 1.05; letter-spacing: -.5px; }
+  .topbar p { display: none; }
+  .top-actions { display: none; }
+  .menu-toggle { width: 42px; height: 42px; border-radius: 12px; font-size: 22px; }
+  .toolbar { padding: 12px; gap: 9px; border-radius: 15px; }
+  .toolbar input, .toolbar select, .toolbar .primary { width: 100%; max-width: none; min-height: 42px; }
+  .toolbar .primary { text-align: center; display: grid; place-items: center; white-space: nowrap; }
+  input, select, textarea { min-height: 40px; font-size: 15px; border-radius: 10px; }
+  label { margin-top: 7px; font-size: 12px; }
+  .card, .service { padding: 12px; border-radius: 15px; }
+  .card h3, .service h3, .section-title h3 { font-size: 18px; }
+  .desktop-table { display: none; }
+  .mobile-list { display: grid; gap: 10px; }
+  .mobile-lead { border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 12px; display: grid; gap: 10px; box-shadow: var(--shadow-sm); }
+  .mobile-lead-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .mobile-lead-head > div { min-width: 0; }
+  .mobile-lead-head b { display: block; font-size: 15px; color: #101828; overflow-wrap: anywhere; }
+  .mobile-lead-head small { display: block; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
+  .mobile-lead-head strong { white-space: nowrap; color: #101828; font-size: 14px; }
+  .mobile-meta { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
+  .mobile-meta span { overflow-wrap: anywhere; }
+  .status-select { width: 100%; min-width: 0; height: 38px; border-radius: 10px; font-size: 12px; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .actions button, .actions a { width: 100%; min-height: 38px; display: grid; place-items: center; padding: 8px; }
+  .form-grid { gap: 8px; }
+  .service-grid { gap: 12px; }
+  .prices { gap: 8px; }
+  .empty { padding: 16px 12px; font-size: 14px; }
+  .toast { left: 12px; right: 12px; bottom: 12px; font-size: 14px; }
+}
+
+@media (max-width: 420px) {
+  main { padding: 10px; }
+  .topbar { border-radius: 14px; }
+  .topbar h2 { font-size: 20px; }
+  .card, .service, .toolbar { padding: 10px; }
+  .actions { grid-template-columns: 1fr; }
+  .mobile-lead-head { flex-direction: column; }
+  .mobile-lead-head strong { white-space: normal; }
+}

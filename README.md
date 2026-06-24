@@ -129,3 +129,15 @@ Esta versão também corrige:
 - Ícone do RN CRM incluído para instalação.
 
 Para o modo aplicativo funcionar, suba no Netlify, abra o site pelo Chrome ou Edge e use a opção **Instalar app** ou **Adicionar à tela inicial**. Se abrir como navegador, remova a instalação antiga e instale novamente após o novo deploy publicado.
+
+## Atualização: registros de login
+
+Esta versão adiciona a página **Registros de login** para o administrador acompanhar os acessos dos vendedores com data, hora, e-mail, nome e dispositivo.
+
+Depois de subir esta versão no GitHub e fazer deploy no Netlify, rode no Supabase:
+
+```txt
+supabase/ATUALIZAR-BANCO.sql
+```
+
+Esse arquivo cria a tabela `login_logs` e as permissões necessárias. Ele não apaga os dados existentes.

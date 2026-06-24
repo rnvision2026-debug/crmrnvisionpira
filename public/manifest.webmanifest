@@ -2,17 +2,33 @@
   "name": "RN CRM Vendas",
   "short_name": "RN CRM",
   "description": "CRM interno da RN Vision Pira para vendedores, leads, propostas e comissões.",
-  "id": "/",
-  "start_url": "/",
+  "id": "/?app=rn-crm-vendas",
+  "start_url": "/?app=rn-crm-vendas",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#ffffff",
-  "theme_color": "#0b5cff",
+  "theme_color": "#ffffff",
   "orientation": "portrait-primary",
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }
