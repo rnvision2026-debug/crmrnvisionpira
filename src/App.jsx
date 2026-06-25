@@ -11,6 +11,7 @@ const STATUS = [
   ['perdido', 'Perdido']
 ]
 const statusLabel = (value) => STATUS.find(([id]) => id === value)?.[1] || 'Novo'
+const typeLabel = (value) => ({ whatsapp_inicio: 'Atendimento iniciado', observacao: 'Resumo da conversa', objecao: 'Objeção', retorno: 'Retorno', proposta: 'Proposta', fechamento: 'Fechamento', atualizacao: 'Atualização' }[value] || 'Registro')
 const money = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const pct = (v) => `${Math.round(Number(v || 0) * 100)}%`
 const todayISO = () => new Date().toISOString()
@@ -65,7 +66,7 @@ function Login({ onLogin, loading, error }) {
 
 function Sidebar({ page, setPage, profile, onLogout, open, onClose }) {
   const items = [
-    ['dashboard', 'Dashboard', '📊'], ['leads', 'Leads', '👥'], ['whatsapp', 'WhatsApp', '💬'], ['servicos', 'Serviços e valores', '💼'], ['comissoes', 'Comissões', '💰'],
+    ['dashboard', 'Dashboard', '📊'], ['leads', 'Leads', '👥'], ['negociacoes', 'Negociações', '📝'], ['servicos', 'Serviços e valores', '💼'], ['comissoes', 'Comissões', '💰'],
     ...(profile.role === 'admin' ? [['vendedores', 'Vendedores', '🧑‍💼'], ['login_logs', 'Registros de login', '🕘']] : []), ['config', 'Configurações', '⚙️']
   ]
   function navigate(id) {
@@ -352,130 +353,146 @@ function LoginLogsPage({ loginLogs, profiles, reload }) {
 }
 
 
-function WhatsAppPage({ profile, profiles, conversations, messages, leads, reload, notify, session }) {
+
+function NegotiationsPage({ profile, profiles, services, leads, activities, reload, notify }) {
   const [selectedId, setSelectedId] = useState('')
   const [search, setSearch] = useState('')
-  const [text, setText] = useState('')
-  const [sending, setSending] = useState(false)
   const [statusFilter, setStatusFilter] = useState('todos')
+  const [note, setNote] = useState('')
+  const [noteType, setNoteType] = useState('observacao')
+  const [nextContact, setNextContact] = useState('')
+  const [proposalValue, setProposalValue] = useState('')
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return conversations.filter(c => {
-      const matchSearch = !q || [c.contact_name, c.contact_phone, c.last_message].filter(Boolean).join(' ').toLowerCase().includes(q)
-      const matchStatus = statusFilter === 'todos' || c.status === statusFilter
-      return matchSearch && matchStatus
+    return leads.filter(l => {
+      const text = [l.client_name, l.company_name, l.whatsapp, l.email].filter(Boolean).join(' ').toLowerCase()
+      return (!q || text.includes(q)) && (statusFilter === 'todos' || l.status === statusFilter)
     })
-  }, [conversations, search, statusFilter])
+  }, [leads, search, statusFilter])
 
   useEffect(() => {
     if (!selectedId && filtered[0]) setSelectedId(filtered[0].id)
-    if (selectedId && !filtered.some(c => c.id === selectedId) && filtered[0]) setSelectedId(filtered[0].id)
+    if (selectedId && !filtered.some(l => l.id === selectedId) && filtered[0]) setSelectedId(filtered[0].id)
   }, [filtered, selectedId])
 
-  const conversation = conversations.find(c => c.id === selectedId) || filtered[0]
-  const conversationMessages = conversation ? messages.filter(m => m.conversation_id === conversation.id) : []
-  const assignedSeller = conversation ? profiles.find(p => p.id === conversation.seller_id) : null
-  const linkedLead = conversation ? leads.find(l => l.id === conversation.lead_id) : null
+  const lead = leads.find(l => l.id === selectedId) || filtered[0]
+  const seller = lead ? profiles.find(p => p.id === lead.vendedor_id) : null
+  const service = lead ? services.find(s => s.id === lead.service_id) : null
+  const leadActivities = lead ? activities.filter(a => a.lead_id === lead.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) : []
 
-  async function assignSeller(sellerId) {
-    if (!conversation) return
-    const { error } = await supabase.from('whatsapp_conversations').update({ seller_id: sellerId || null }).eq('id', conversation.id)
+  function initialMessage(l = lead) {
+    const sellerName = profile.role === 'admin' ? (seller?.name || profile.name) : profile.name
+    const serviceName = service?.name || 'um site/sistema profissional'
+    return `Olá, tudo bem? Aqui é o ${sellerName}, da RN Vision Pira.\n\nVi que você tem interesse em ${serviceName}. Posso te explicar as opções e valores?`
+  }
+
+  async function addActivity(type, description) {
+    if (!lead) return
+    const { error } = await supabase.from('activities').insert({
+      lead_id: lead.id,
+      user_id: profile.id,
+      type,
+      description
+    })
     if (error) return notify(error.message, 'danger')
-    notify('Atendimento atribuído.', 'ok')
     reload()
+  }
+
+  async function startWhatsApp() {
+    if (!lead) return notify('Selecione um lead.', 'danger')
+    if (!lead.whatsapp) return notify('Esse lead não tem WhatsApp cadastrado.', 'danger')
+    const message = initialMessage(lead)
+    await addActivity('whatsapp_inicio', `Atendimento iniciado pelo WhatsApp do vendedor. Mensagem inicial: ${message}`)
+    const phone = cleanPhone(lead.whatsapp)
+    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank')
+  }
+
+  async function copyMessage() {
+    if (!lead) return
+    await navigator.clipboard?.writeText(initialMessage(lead))
+    notify('Mensagem inicial copiada.', 'ok')
+  }
+
+  async function saveNote(e) {
+    e.preventDefault()
+    if (!lead) return notify('Selecione um lead.', 'danger')
+    const text = note.trim()
+    if (!text) return notify('Digite o resumo da negociação.', 'danger')
+    await addActivity(noteType, text)
+    setNote('')
+    notify('Registro salvo na negociação.', 'ok')
+  }
+
+  async function updateLead(fields, description) {
+    if (!lead) return
+    const { error } = await supabase.from('leads').update(fields).eq('id', lead.id)
+    if (error) return notify(error.message, 'danger')
+    if (description) await addActivity('atualizacao', description)
+    notify('Negociação atualizada.', 'ok')
+    reload()
+  }
+
+  async function saveNextContact(e) {
+    e.preventDefault()
+    if (!nextContact) return notify('Informe a data de retorno.', 'danger')
+    await updateLead({ next_contact_at: nextContact }, `Retorno agendado para ${nextContact}.`)
+    setNextContact('')
+  }
+
+  async function saveProposal(e) {
+    e.preventDefault()
+    const value = Number(proposalValue || 0)
+    if (!value) return notify('Informe o valor da proposta.', 'danger')
+    await updateLead({ proposal_value: value, status: 'proposta_enviada' }, `Proposta registrada/enviada no valor de ${money(value)}.`)
+    setProposalValue('')
   }
 
   async function changeStatus(nextStatus) {
-    if (!conversation) return
-    const { error } = await supabase.from('whatsapp_conversations').update({ status: nextStatus }).eq('id', conversation.id)
+    await updateLead({ status: nextStatus, closed_at: nextStatus === 'fechado' ? todayISO() : null }, `Status alterado para ${statusLabel(nextStatus)}.`)
+  }
+
+  async function deleteActivity(id) {
+    if (profile.role !== 'admin') return notify('Apenas admin pode excluir registros.', 'danger')
+    if (!confirm('Excluir esse registro da negociação?')) return
+    const { error } = await supabase.from('activities').delete().eq('id', id)
     if (error) return notify(error.message, 'danger')
-    notify('Status do atendimento atualizado.', 'ok')
+    notify('Registro excluído.', 'ok')
     reload()
   }
 
-  async function createLeadFromConversation() {
-    if (!conversation) return
-    const sellerId = conversation.seller_id || (profile.role === 'vendedor' ? profile.id : '')
-    if (!sellerId) return notify('Atribua um vendedor antes de transformar em lead.', 'danger')
-    const payload = {
-      vendedor_id: sellerId,
-      client_name: conversation.contact_name || `Contato ${conversation.contact_phone}`,
-      company_name: '',
-      whatsapp: conversation.contact_phone,
-      email: '',
-      origin: 'WhatsApp CRM',
-      status: 'em_atendimento',
-      proposal_value: 0,
-      notes: 'Lead criado a partir do atendimento WhatsApp.',
-      next_contact_at: null
-    }
-    const { data, error } = await supabase.from('leads').insert(payload).select('id').single()
-    if (error) return notify(error.message, 'danger')
-    await supabase.from('whatsapp_conversations').update({ lead_id: data.id }).eq('id', conversation.id)
-    notify('Lead criado e vinculado ao atendimento.', 'ok')
-    reload()
-  }
-
-  async function sendMessage(e) {
-    e?.preventDefault()
-    if (!conversation) return notify('Selecione um atendimento.', 'danger')
-    const message = text.trim()
-    if (!message) return notify('Digite a mensagem.', 'danger')
-    try {
-      setSending(true)
-      const token = session?.access_token
-      const response = await fetch('/.netlify/functions/send-whatsapp-message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ conversation_id: conversation.id, message })
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error || 'Erro ao enviar mensagem pelo WhatsApp.')
-      setText('')
-      notify('Mensagem enviada pelo WhatsApp.', 'ok')
-      reload()
-    } catch (err) {
-      notify(err.message || 'Erro ao enviar WhatsApp.', 'danger')
-    } finally {
-      setSending(false)
-    }
-  }
-
-  return <div className="grid gap whatsapp-page">
-    <section className="section-title"><div><h3>Atendimentos WhatsApp</h3><p>Centralize as conversas do número da RN Vision Pira e acompanhe a negociação de cada vendedor.</p></div><span className="badge ok">Cloud API</span></section>
-    <div className="whatsapp-shell">
+  return <div className="grid gap negotiations-page">
+    <section className="section-title"><div><h3>Processo de negociação</h3><p>O vendedor usa o próprio WhatsApp, e o CRM registra apenas as negociações iniciadas por aqui.</p></div><span className="badge ok">Privacidade preservada</span></section>
+    <div className="negotiation-shell">
       <aside className="card conversations-card">
-        <div className="form-head"><div><h3>Conversas</h3><p className="muted">{filtered.length} atendimento(s)</p></div></div>
-        <div className="mini-filters"><input placeholder="Buscar contato..." value={search} onChange={e => setSearch(e.target.value)} /><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="todos">Todos</option><option value="novo">Novo</option><option value="em_atendimento">Em atendimento</option><option value="proposta_enviada">Proposta enviada</option><option value="negociacao">Negociação</option><option value="fechado">Fechado</option><option value="perdido">Perdido</option></select></div>
+        <div className="form-head"><div><h3>Leads em atendimento</h3><p className="muted">{filtered.length} lead(s) encontrados</p></div></div>
+        <div className="mini-filters"><input placeholder="Buscar lead..." value={search} onChange={e => setSearch(e.target.value)} /><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="todos">Todos</option>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></div>
         <div className="conversation-list">
-          {filtered.map(c => <button key={c.id} type="button" className={`conversation-item ${conversation?.id === c.id ? 'active' : ''}`} onClick={() => setSelectedId(c.id)}>
-            <div className="conversation-avatar">{(c.contact_name || c.contact_phone || '?').slice(0, 1).toUpperCase()}</div>
-            <div><b>{c.contact_name || c.contact_phone}</b><small>{c.contact_phone}</small><p>{c.last_message || 'Sem mensagens ainda.'}</p></div>
-            {!!c.unread_count && <span className="unread-dot">{c.unread_count}</span>}
+          {filtered.map(l => <button key={l.id} type="button" className={`conversation-item ${lead?.id === l.id ? 'active' : ''}`} onClick={() => setSelectedId(l.id)}>
+            <div className="conversation-avatar">{(l.client_name || '?').slice(0, 1).toUpperCase()}</div>
+            <div><b>{l.client_name}</b><small>{l.company_name || l.whatsapp || 'Sem empresa'}</small><p>{statusLabel(l.status)} • {money(l.proposal_value)}</p></div>
           </button>)}
-          {!filtered.length && <p className="empty">Nenhuma conversa recebida ainda. Assim que o cliente mandar mensagem no WhatsApp da RN Vision Pira, ela aparece aqui.</p>}
+          {!filtered.length && <p className="empty">Nenhum lead encontrado. Cadastre um lead primeiro.</p>}
         </div>
       </aside>
 
-      <section className="card chat-card">
-        {!conversation ? <div className="empty-chat"><h3>Nenhuma conversa selecionada</h3><p>Configure o webhook da Meta e aguarde uma mensagem entrar pelo WhatsApp.</p></div> : <>
-          <div className="chat-head">
-            <div><h3>{conversation.contact_name || conversation.contact_phone}</h3><p>{conversation.contact_phone} {assignedSeller ? `• Atendente: ${assignedSeller.name}` : '• Sem vendedor atribuído'}</p>{linkedLead && <small>Lead vinculado: {linkedLead.client_name}</small>}</div>
-            <div className="chat-actions">
-              <select value={conversation.status || 'novo'} onChange={e => changeStatus(e.target.value)}>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
-              {profile.role === 'admin' && <select value={conversation.seller_id || ''} onChange={e => assignSeller(e.target.value)}><option value="">Atribuir vendedor</option>{profiles.filter(p => p.role === 'vendedor' && p.active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
-              {!conversation.lead_id && <button type="button" onClick={createLeadFromConversation}>Criar lead</button>}
-            </div>
+      <section className="card negotiation-card">
+        {!lead ? <div className="empty-chat"><h3>Nenhum lead selecionado</h3><p>Selecione um lead para iniciar o atendimento pelo WhatsApp e acompanhar o processo comercial.</p></div> : <>
+          <div className="chat-head negotiation-head">
+            <div><h3>{lead.client_name}</h3><p>{lead.company_name || 'Sem empresa'} • {lead.whatsapp || 'Sem WhatsApp'} • Vendedor: {seller?.name || '-'}</p><small>Serviço: {service?.name || '-'} • Proposta: {money(lead.proposal_value)}</small></div>
+            <div className="chat-actions"><select value={lead.status || 'novo'} onChange={e => changeStatus(e.target.value)}>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select><button type="button" onClick={startWhatsApp}>Iniciar WhatsApp</button><button type="button" onClick={copyMessage}>Copiar mensagem</button></div>
           </div>
-          <div className="chat-window">
-            {conversationMessages.map(m => <div key={m.id} className={`message-bubble ${m.direction}`}><div><p>{m.message}</p><small>{m.sender_name || (m.direction === 'inbound' ? conversation.contact_name || 'Cliente' : 'RN Vision Pira')} • {formatDateTime(m.created_at)}</small></div></div>)}
-            {!conversationMessages.length && <p className="empty">Nenhuma mensagem nesse atendimento.</p>}
+
+          <div className="negotiation-panels">
+            <form className="mini-card" onSubmit={saveNote}><h4>Registrar conversa</h4><select value={noteType} onChange={e => setNoteType(e.target.value)}><option value="observacao">Resumo da conversa</option><option value="objecao">Objeção do cliente</option><option value="retorno">Retorno feito</option><option value="proposta">Proposta enviada</option><option value="fechamento">Fechamento</option></select><textarea rows="4" placeholder="Ex: Cliente pediu para enviar proposta com site completo e galeria. Ficou de responder amanhã." value={note} onChange={e => setNote(e.target.value)} /><button className="primary">Salvar registro</button></form>
+            <form className="mini-card" onSubmit={saveProposal}><h4>Proposta</h4><input type="number" step="0.01" placeholder="Valor negociado" value={proposalValue} onChange={e => setProposalValue(e.target.value)} /><button>Registrar proposta</button></form>
+            <form className="mini-card" onSubmit={saveNextContact}><h4>Próximo retorno</h4><input type="date" value={nextContact} onChange={e => setNextContact(e.target.value)} /><button>Agendar retorno</button></form>
           </div>
-          <form className="chat-composer" onSubmit={sendMessage}>
-            <textarea rows="3" value={text} onChange={e => setText(e.target.value)} placeholder={assignedSeller || profile.role === 'admin' ? 'Digite a resposta para o cliente...' : 'Aguarde o admin atribuir um vendedor.'} disabled={profile.role !== 'admin' && conversation.seller_id !== profile.id} />
-            <div><small>A mensagem será enviada com identificação do atendente, ex: {profile.name} | RN Vision Pira.</small><button className="primary" disabled={sending || (profile.role !== 'admin' && conversation.seller_id !== profile.id)}>{sending ? 'Enviando...' : 'Enviar WhatsApp'}</button></div>
-          </form>
+
+          <div className="timeline-card"><div className="form-head"><div><h3>Linha do tempo</h3><p className="muted">Admin vê somente os registros feitos no CRM, não as conversas pessoais do WhatsApp do vendedor.</p></div></div><div className="timeline">
+            {leadActivities.map(a => { const author = profiles.find(p => p.id === a.user_id); return <article key={a.id} className="timeline-item"><div className="timeline-dot" /><div><div className="timeline-top"><b>{typeLabel(a.type)}</b><small>{formatDateTime(a.created_at)}</small></div><p>{a.description}</p><small>Registrado por: {author?.name || 'Sistema'}</small>{profile.role === 'admin' && <button className="link-danger" onClick={() => deleteActivity(a.id)}>Excluir registro</button>}</div></article> })}
+            {!leadActivities.length && <p className="empty">Nenhum registro ainda. Clique em Iniciar WhatsApp ou registre o resumo da conversa.</p>}
+          </div></div>
         </>}
       </section>
     </div>
@@ -495,8 +512,7 @@ function App() {
   const [services, setServices] = useState([])
   const [leads, setLeads] = useState([])
   const [loginLogs, setLoginLogs] = useState([])
-  const [whatsappConversations, setWhatsappConversations] = useState([])
-  const [whatsappMessages, setWhatsappMessages] = useState([])
+  const [activities, setActivities] = useState([])
   const [page, setPage] = useState('dashboard')
   const [loading, setLoading] = useState(true)
   const [loginLoading, setLoginLoading] = useState(false)
@@ -547,22 +563,20 @@ function App() {
 
   async function loadData(currentProfile = profile) {
     if (!currentProfile) return
-    const [profilesRes, servicesRes, leadsRes, loginLogsRes, conversationsRes, messagesRes] = await Promise.all([
+    const [profilesRes, servicesRes, leadsRes, loginLogsRes, activitiesRes] = await Promise.all([
       supabase.from('profiles').select('*').order('created_at', { ascending: false }),
       supabase.from('services').select('*').order('sort_order', { ascending: true }),
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
       currentProfile.role === 'admin'
         ? supabase.from('login_logs').select('*').order('created_at', { ascending: false }).limit(500)
         : Promise.resolve({ data: [], error: null }),
-      supabase.from('whatsapp_conversations').select('*').order('last_message_at', { ascending: false, nullsFirst: false }).limit(300),
-      supabase.from('whatsapp_messages').select('*').order('created_at', { ascending: true }).limit(1200)
+      supabase.from('activities').select('*').order('created_at', { ascending: false }).limit(1500)
     ])
     if (profilesRes.error) notify(profilesRes.error.message, 'danger'); else setProfiles(profilesRes.data || [])
     if (servicesRes.error) notify(servicesRes.error.message, 'danger'); else setServices(servicesRes.data || [])
     if (leadsRes.error) notify(leadsRes.error.message, 'danger'); else setLeads(leadsRes.data || [])
     if (loginLogsRes.error && currentProfile.role === 'admin') notify(loginLogsRes.error.message, 'danger'); else setLoginLogs(loginLogsRes.data || [])
-    if (conversationsRes.error) setWhatsappConversations([]); else setWhatsappConversations(conversationsRes.data || [])
-    if (messagesRes.error) setWhatsappMessages([]); else setWhatsappMessages(messagesRes.data || [])
+    if (activitiesRes.error) setActivities([]); else setActivities(activitiesRes.data || [])
   }
 
   useEffect(() => {
@@ -612,10 +626,10 @@ function App() {
     finally { setLoginLoading(false) }
   }
 
-  async function logout() { await supabase.auth.signOut(); setSession(null); setProfile(null); setProfiles([]); setLeads([]); setLoginLogs([]); setWhatsappConversations([]); setWhatsappMessages([]) }
+  async function logout() { await supabase.auth.signOut(); setSession(null); setProfile(null); setProfiles([]); setLeads([]); setLoginLogs([]); setActivities([]) }
 
   const visibleLeads = useMemo(() => leads, [leads])
-  const titles = { dashboard: 'Dashboard', leads: 'Leads / Clientes', whatsapp: 'Atendimentos WhatsApp', servicos: 'Serviços e valores', comissoes: 'Comissões', vendedores: 'Vendedores', login_logs: 'Registros de login', config: 'Configurações' }
+  const titles = { dashboard: 'Dashboard', leads: 'Leads / Clientes', negociacoes: 'Negociações', servicos: 'Serviços e valores', comissoes: 'Comissões', vendedores: 'Vendedores', login_logs: 'Registros de login', config: 'Configurações' }
 
   if (loading) return <Welcome />
   if (!session || !profile) return <><Login onLogin={login} loading={loginLoading} error={error} /><Toast {...toast} onClose={() => setToast({ message: '', type: '' })} /></>
@@ -625,7 +639,7 @@ function App() {
     <Layout page={page} setPage={setPage} profile={profile} onLogout={logout} onInstallApp={installApp} title={titles[page] || 'RN CRM Vendas'}>
       {page === 'dashboard' && <Dashboard leads={visibleLeads} profiles={profiles} profile={profile} />}
       {page === 'leads' && <LeadsPage profile={profile} profiles={profiles} services={services} leads={visibleLeads} reload={() => loadData(profile)} notify={notify} />}
-      {page === 'whatsapp' && <WhatsAppPage profile={profile} profiles={profiles} conversations={whatsappConversations} messages={whatsappMessages} leads={visibleLeads} reload={() => loadData(profile)} notify={notify} session={session} />}
+      {page === 'negociacoes' && <NegotiationsPage profile={profile} profiles={profiles} services={services} leads={visibleLeads} activities={activities} reload={() => loadData(profile)} notify={notify} />}
       {page === 'servicos' && <ServicesPage profile={profile} services={services} reload={() => loadData(profile)} notify={notify} />}
       {page === 'comissoes' && <CommissionsPage leads={visibleLeads} profiles={profiles} />}
       {page === 'vendedores' && profile.role === 'admin' && <SellersPage profiles={profiles} reload={() => loadData(profile)} notify={notify} session={session} />}

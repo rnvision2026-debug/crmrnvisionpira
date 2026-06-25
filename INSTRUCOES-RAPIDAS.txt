@@ -1,32 +1,29 @@
-RN CRM Vendas - WhatsApp Cloud API
+RN CRM Vendas - Negociação via WhatsApp do Vendedor
 
-1) Suba esta versão no GitHub.
-2) Netlify:
+1) Suba no GitHub os arquivos desta pasta.
+
+2) Não suba:
+   node_modules
+   dist
+   .env
+   package-lock.json
+
+3) No Netlify:
+   Base directory: deixe em branco
    Build command: npm run build
    Publish directory: dist
-   Base directory: deixe em branco
 
-3) Cadastre no Netlify as variáveis:
+4) Variáveis no Netlify:
    VITE_SUPABASE_URL
    VITE_SUPABASE_ANON_KEY
    SUPABASE_SERVICE_ROLE_KEY
-   WHATSAPP_ACCESS_TOKEN
-   WHATSAPP_PHONE_NUMBER_ID
-   WHATSAPP_VERIFY_TOKEN
-   WHATSAPP_GRAPH_VERSION=v20.0
 
-4) Supabase:
-   Rode supabase/schema.sql se for banco novo.
-   Se já existe, rode supabase/ATUALIZAR-BANCO.sql.
-   Crie o admin e rode supabase/admin_setup.sql.
+5) No Supabase:
+   Se for banco novo, rode supabase/schema.sql.
+   Se já usa o CRM, rode supabase/ATUALIZAR-BANCO.sql.
 
-5) Na Meta/WhatsApp Cloud API:
-   Callback URL:
-   https://SEU-SITE.netlify.app/.netlify/functions/whatsapp-webhook
+6) Como funciona a negociação:
+   O vendedor seleciona o lead, clica em Iniciar WhatsApp e conversa pelo WhatsApp dele.
+   O CRM salva apenas o histórico que ele registrar: resumo, objeção, proposta, retorno e status.
 
-   Verify Token:
-   O mesmo valor cadastrado em WHATSAPP_VERIFY_TOKEN no Netlify.
-
-6) Assine o evento messages.
-
-7) Quando um cliente mandar mensagem para o WhatsApp da RN Vision Pira, a conversa aparece em Atendimentos WhatsApp.
+7) Depois do deploy, remova o app/atalho antigo e instale novamente se quiser atualizar o ícone/PWA.

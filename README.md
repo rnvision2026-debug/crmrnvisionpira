@@ -1,27 +1,28 @@
-# RN CRM Vendas — NPM/React + Supabase + Netlify + WhatsApp
+# RN CRM Vendas — NPM/React + Supabase + Netlify
 
-Sistema interno de vendas da RN Vision Pira com visual clean, responsivo, PWA, login Supabase, cadastro de vendedores direto no CRM e central de atendimentos WhatsApp.
+Sistema interno de vendas da RN Vision Pira com visual clean, responsivo, PWA, login Supabase, cadastro de vendedores direto no CRM e acompanhamento de negociações iniciadas pelo WhatsApp do vendedor.
 
-## O que vem pronto
+## O que tem nesta versão
 
 - Login com Supabase Auth.
-- Painel Admin e Painel do Vendedor.
-- Cadastro de vendedores direto no CRM via Netlify Function.
-- Troca de senha de vendedor pelo admin.
+- Painel Admin e Painel Vendedor.
+- Cadastro de vendedores direto no CRM.
+- Troca de senha do vendedor pelo admin.
 - Cadastro de serviços e valores.
-- Leads/clientes com status comercial.
-- Comissões e bônus por meta.
+- Leads/clientes.
+- Status do lead.
+- Comissão e bônus por meta.
 - Registros de login dos vendedores.
-- Menu responsivo e PWA com ícone.
-- Página **Atendimentos WhatsApp**.
-- Webhook para receber mensagens do WhatsApp Cloud API.
-- Envio de mensagens pelo CRM com identificação do vendedor.
-- Admin pode atribuir atendimento a vendedor.
-- Vendedor vê e responde apenas seus atendimentos.
+- Página **Negociações**.
+- Botão **Iniciar WhatsApp** usando o WhatsApp do vendedor.
+- Linha do tempo do processo comercial.
+- Registro de resumo da conversa, objeção, proposta e retorno.
+- Admin acompanha somente os registros feitos no CRM, sem acessar conversas pessoais do WhatsApp do vendedor.
+- PWA para instalar como aplicativo no computador/celular.
 
 ## Como subir no GitHub
 
-Suba os arquivos da pasta do projeto, mas não suba:
+Suba todos os arquivos desta pasta, exceto:
 
 ```txt
 node_modules
@@ -47,78 +48,51 @@ README.md
 INSTRUCOES-RAPIDAS.txt
 ```
 
-## Configuração no Netlify
-
-Use:
+## Configuração do Netlify
 
 ```txt
-Base directory: deixe em branco
+Base directory: deixar em branco
 Build command: npm run build
 Publish directory: dist
 ```
 
 ## Variáveis no Netlify
 
-Em **Project configuration > Environment variables**, cadastre:
+Coloque em **Project configuration > Environment variables**:
 
 ```env
 VITE_SUPABASE_URL=https://isqiekclfdvekfwblhds.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_PvFYSb8eHJdWQyniCYpOiw_CPFHVOOD
-SUPABASE_SERVICE_ROLE_KEY=SUA_SERVICE_ROLE_KEY_DO_SUPABASE
-WHATSAPP_ACCESS_TOKEN=TOKEN_PERMANENTE_DA_META
-WHATSAPP_PHONE_NUMBER_ID=PHONE_NUMBER_ID_DA_META
-WHATSAPP_VERIFY_TOKEN=UM_TOKEN_CRIADO_POR_VOCE
-WHATSAPP_GRAPH_VERSION=v20.0
+SUPABASE_SERVICE_ROLE_KEY=SUA_CHAVE_SERVICE_ROLE_DO_SUPABASE
 ```
 
-A `SUPABASE_SERVICE_ROLE_KEY` e `WHATSAPP_ACCESS_TOKEN` são secretas e devem ficar somente no Netlify. Nunca coloque essas chaves no GitHub.
+A `SUPABASE_SERVICE_ROLE_KEY` é secreta. Ela fica somente no Netlify e nunca deve ir para o GitHub.
 
 ## Supabase
 
-1. Abra `supabase/schema.sql`.
-2. Cole no SQL Editor do Supabase e execute.
-3. Crie o usuário admin em Authentication > Users:
+Se for projeto novo, rode:
 
 ```txt
-admin@rnvision.com.br
-123456
+supabase/schema.sql
 ```
 
-4. Execute `supabase/admin_setup.sql` no SQL Editor.
-
-Se você já tinha o banco criado, rode também:
+Se já existe o banco, rode:
 
 ```txt
 supabase/ATUALIZAR-BANCO.sql
 ```
 
-Esse arquivo atualiza o banco sem apagar dados.
+Esse arquivo cria/atualiza a tabela `activities`, usada pela linha do tempo das negociações, sem apagar seus dados.
 
-## Webhook do WhatsApp Cloud API
+## Fluxo de negociação pelo WhatsApp do vendedor
 
-Depois do deploy publicado, use esta URL na Meta:
+1. O vendedor cadastra ou abre um lead.
+2. Vai em **Negociações**.
+3. Seleciona o lead.
+4. Clica em **Iniciar WhatsApp**.
+5. O CRM abre o WhatsApp do vendedor com mensagem pronta.
+6. O CRM registra que o atendimento foi iniciado.
+7. O vendedor registra no CRM os resumos, objeções, propostas e retornos.
+8. O admin acompanha o processo comercial pela linha do tempo.
 
-```txt
-https://SEU-SITE.netlify.app/.netlify/functions/whatsapp-webhook
-```
-
-No campo **Verify token**, use exatamente o mesmo valor da variável:
-
-```txt
-WHATSAPP_VERIFY_TOKEN
-```
-
-Depois assine o evento **messages** no webhook da Meta.
-
-## Teste local opcional
-
-```bash
-npm install
-npm run dev
-```
-
-## Build testado
-
-```bash
-npm run build
-```
+Essa versão não conecta no WhatsApp pessoal do vendedor e não lê conversas privadas. Ela registra apenas o processo comercial que o vendedor informar dentro do CRM.

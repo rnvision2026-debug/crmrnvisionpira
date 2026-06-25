@@ -527,3 +527,37 @@ html, body, #root { width: 100%; max-width: 100%; overflow-x: hidden; }
   .conversation-item { grid-template-columns: 38px minmax(0, 1fr) auto; padding: 9px; }
   .conversation-avatar { width: 38px; height: 38px; }
 }
+
+/* Processo de negociação pelo WhatsApp do vendedor */
+.negotiations-page .section-title { align-items: center; }
+.negotiation-shell { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; align-items: start; }
+.negotiation-card { padding: 0; overflow: hidden; }
+.negotiation-head { border-bottom: 1px solid var(--line); }
+.negotiation-panels { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(220px, .8fr) minmax(220px, .8fr); gap: 12px; padding: 16px; background: #fff; border-bottom: 1px solid var(--line); }
+.mini-card { border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: grid; gap: 8px; background: #fbfcff; box-shadow: var(--shadow-sm); }
+.mini-card h4 { margin: 0 0 3px; color: #101828; }
+.mini-card textarea { resize: vertical; }
+.timeline-card { padding: 16px; background: #fff; }
+.timeline { display: grid; gap: 12px; margin-top: 8px; }
+.timeline-item { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; position: relative; }
+.timeline-item:not(:last-child)::before { content: ''; position: absolute; left: 8px; top: 18px; bottom: -12px; width: 2px; background: #e4e7ec; }
+.timeline-dot { width: 18px; height: 18px; border-radius: 50%; background: #0f6bff; border: 4px solid #eaf1ff; margin-top: 3px; z-index: 1; }
+.timeline-item > div:last-child { border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 12px; box-shadow: var(--shadow-sm); }
+.timeline-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.timeline-top b { color: #101828; }
+.timeline-top small { color: var(--muted); white-space: nowrap; }
+.timeline-item p { white-space: pre-wrap; color: #344054; line-height: 1.48; margin: 8px 0; }
+.link-danger { border: 0; background: transparent; color: #b42318; padding: 0; margin-top: 8px; font-weight: 800; cursor: pointer; }
+
+@media (max-width: 1100px) {
+  .negotiation-shell { grid-template-columns: 1fr; }
+  .negotiation-panels { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .negotiation-shell { gap: 12px; }
+  .negotiation-panels, .timeline-card { padding: 12px; }
+  .timeline-top { flex-direction: column; gap: 3px; }
+  .timeline-top small { white-space: normal; }
+  .negotiation-head { padding: 12px; flex-direction: column; }
+}
