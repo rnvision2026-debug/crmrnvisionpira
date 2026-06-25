@@ -1,98 +1,44 @@
-# RN CRM Vendas — NPM/React + Supabase + Netlify
+# RN CRM Vendas — Negociações Simplificadas
 
-Sistema interno de vendas da RN Vision Pira com visual clean, responsivo, PWA, login Supabase, cadastro de vendedores direto no CRM e acompanhamento de negociações iniciadas pelo WhatsApp do vendedor.
+Versão NPM/React para GitHub + Netlify + Supabase.
 
-## O que tem nesta versão
+## O que foi ajustado
 
-- Login com Supabase Auth.
-- Painel Admin e Painel Vendedor.
-- Cadastro de vendedores direto no CRM.
-- Troca de senha do vendedor pelo admin.
-- Cadastro de serviços e valores.
-- Leads/clientes.
-- Status do lead.
-- Comissão e bônus por meta.
-- Registros de login dos vendedores.
-- Página **Negociações**.
-- Botão **Iniciar WhatsApp** usando o WhatsApp do vendedor.
-- Linha do tempo do processo comercial.
-- Registro de resumo da conversa, objeção, proposta e retorno.
-- Admin acompanha somente os registros feitos no CRM, sem acessar conversas pessoais do WhatsApp do vendedor.
-- PWA para instalar como aplicativo no computador/celular.
+- Página **Negociações** redesenhada para ficar mais simples e objetiva.
+- Admin pode editar a mensagem automática do WhatsApp pelo CRM.
+- Mensagem automática com variáveis: `{vendedor}`, `{cliente}`, `{empresa}`, `{servico}`, `{valor}`.
+- Vendedor inicia atendimento pelo WhatsApp próprio.
+- CRM registra apenas o processo da negociação, sem acessar conversas pessoais.
+- Histórico mais organizado por lead.
+- Layout responsivo mantido.
 
-## Como subir no GitHub
+## Netlify
 
-Suba todos os arquivos desta pasta, exceto:
+Use:
 
-```txt
-node_modules
-dist
-.env
-package-lock.json
-```
+- Build command: `npm run build`
+- Publish directory: `dist`
+- Base directory: deixe em branco
 
-Pode subir:
+## Não subir no GitHub
 
-```txt
-src
-public
-supabase
-netlify
-package.json
-index.html
-vite.config.js
-netlify.toml
-.npmrc
-.env.example
-README.md
-INSTRUCOES-RAPIDAS.txt
-```
+- `node_modules`
+- `dist`
+- `.env`
+- `package-lock.json`
 
-## Configuração do Netlify
-
-```txt
-Base directory: deixar em branco
-Build command: npm run build
-Publish directory: dist
-```
-
-## Variáveis no Netlify
-
-Coloque em **Project configuration > Environment variables**:
+## Variáveis necessárias no Netlify
 
 ```env
-VITE_SUPABASE_URL=https://isqiekclfdvekfwblhds.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_PvFYSb8eHJdWQyniCYpOiw_CPFHVOOD
-SUPABASE_SERVICE_ROLE_KEY=SUA_CHAVE_SERVICE_ROLE_DO_SUPABASE
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-A `SUPABASE_SERVICE_ROLE_KEY` é secreta. Ela fica somente no Netlify e nunca deve ir para o GitHub.
+## Banco de dados
 
-## Supabase
+Depois de subir e fazer deploy, rode no Supabase:
 
-Se for projeto novo, rode:
+`supabase/ATUALIZAR-BANCO.sql`
 
-```txt
-supabase/schema.sql
-```
-
-Se já existe o banco, rode:
-
-```txt
-supabase/ATUALIZAR-BANCO.sql
-```
-
-Esse arquivo cria/atualiza a tabela `activities`, usada pela linha do tempo das negociações, sem apagar seus dados.
-
-## Fluxo de negociação pelo WhatsApp do vendedor
-
-1. O vendedor cadastra ou abre um lead.
-2. Vai em **Negociações**.
-3. Seleciona o lead.
-4. Clica em **Iniciar WhatsApp**.
-5. O CRM abre o WhatsApp do vendedor com mensagem pronta.
-6. O CRM registra que o atendimento foi iniciado.
-7. O vendedor registra no CRM os resumos, objeções, propostas e retornos.
-8. O admin acompanha o processo comercial pela linha do tempo.
-
-Essa versão não conecta no WhatsApp pessoal do vendedor e não lê conversas privadas. Ela registra apenas o processo comercial que o vendedor informar dentro do CRM.
+Esse arquivo cria/atualiza a tabela `app_settings` usada para salvar a mensagem automática do WhatsApp. Não apaga seus dados.

@@ -31,6 +31,15 @@ const blankService = {
   payment_terms: '50% para iniciar e 50% na entrega, após aprovação.', delivery_time: '7 a 15 dias úteis', sales_arguments: '', active: true, sort_order: 0
 }
 const blankSeller = { name: '', email: '', password: '', phone: '', commission_rate: 0.15 }
+const DEFAULT_WHATSAPP_TEMPLATE = `Olá, tudo bem? Aqui é o {vendedor}, da RN Vision Pira.
+
+Vi que você tem interesse em {servico}. Posso te explicar as opções e valores?`
+const renderTemplate = (template, data) => String(template || DEFAULT_WHATSAPP_TEMPLATE)
+  .replaceAll('{vendedor}', data.vendedor || '')
+  .replaceAll('{cliente}', data.cliente || '')
+  .replaceAll('{empresa}', data.empresa || '')
+  .replaceAll('{servico}', data.servico || '')
+  .replaceAll('{valor}', data.valor || '')
 
 function Toast({ message, type, onClose }) {
   if (!message) return null
@@ -354,7 +363,7 @@ function LoginLogsPage({ loginLogs, profiles, reload }) {
 
 
 
-function NegotiationsPage({ profile, profiles, services, leads, activities, reload, notify }) {
+function NegotiationsPage({ profile, profiles, services, leads, activities, settings, reload, notify }) {
   const [selectedId, setSelectedId] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('todos')
@@ -362,6 +371,11 @@ function NegotiationsPage({ profile, profiles, services, leads, activities, relo
   const [noteType, setNoteType] = useState('observacao')
   const [nextContact, setNextContact] = useState('')
   const [proposalValue, setProposalValue] = useState('')
+  const [templateDraft, setTemplateDraft] = useState(settings?.whatsapp_template || DEFAULT_WHATSAPP_TEMPLATE)
+
+  useEffect(() => {
+    setTemplateDraft(settings?.whatsapp_template || DEFAULT_WHATSAPP_TEMPLATE)
+  }, [settings?.whatsapp_template])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -380,11 +394,30 @@ function NegotiationsPage({ profile, profiles, services, leads, activities, relo
   const seller = lead ? profiles.find(p => p.id === lead.vendedor_id) : null
   const service = lead ? services.find(s => s.id === lead.service_id) : null
   const leadActivities = lead ? activities.filter(a => a.lead_id === lead.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) : []
+  const activeCount = filtered.filter(l => ['novo', 'em_atendimento', 'proposta_enviada', 'negociacao'].includes(l.status)).length
+  const followUps = filtered.filter(l => l.next_contact_at).length
+  const sentProposals = filtered.filter(l => l.status === 'proposta_enviada' || l.proposal_value > 0).length
 
   function initialMessage(l = lead) {
-    const sellerName = profile.role === 'admin' ? (seller?.name || profile.name) : profile.name
-    const serviceName = service?.name || 'um site/sistema profissional'
-    return `Olá, tudo bem? Aqui é o ${sellerName}, da RN Vision Pira.\n\nVi que você tem interesse em ${serviceName}. Posso te explicar as opções e valores?`
+    const selectedSeller = l ? profiles.find(p => p.id === l.vendedor_id) : seller
+    const selectedService = l ? services.find(s => s.id === l.service_id) : service
+    return renderTemplate(settings?.whatsapp_template || DEFAULT_WHATSAPP_TEMPLATE, {
+      vendedor: profile.role === 'admin' ? (selectedSeller?.name || profile.name) : profile.name,
+      cliente: l?.client_name || 'cliente',
+      empresa: l?.company_name || '',
+      servico: selectedService?.name || 'um site/sistema profissional',
+      valor: money(l?.proposal_value || initialValue(selectedService))
+    })
+  }
+
+  async function saveTemplate(e) {
+    e.preventDefault()
+    if (profile.role !== 'admin') return notify('Apenas admin pode alterar a mensagem automática.', 'danger')
+    const value = templateDraft.trim() || DEFAULT_WHATSAPP_TEMPLATE
+    const { error } = await supabase.from('app_settings').upsert({ key: 'whatsapp_template', value }, { onConflict: 'key' })
+    if (error) return notify(error.message, 'danger')
+    notify('Mensagem automática atualizada.', 'ok')
+    reload()
   }
 
   async function addActivity(type, description) {
@@ -403,7 +436,10 @@ function NegotiationsPage({ profile, profiles, services, leads, activities, relo
     if (!lead) return notify('Selecione um lead.', 'danger')
     if (!lead.whatsapp) return notify('Esse lead não tem WhatsApp cadastrado.', 'danger')
     const message = initialMessage(lead)
-    await addActivity('whatsapp_inicio', `Atendimento iniciado pelo WhatsApp do vendedor. Mensagem inicial: ${message}`)
+    await addActivity('whatsapp_inicio', `Atendimento iniciado pelo WhatsApp do vendedor. Mensagem inicial:\n${message}`)
+    if (lead.status === 'novo') {
+      await supabase.from('leads').update({ status: 'em_atendimento' }).eq('id', lead.id)
+    }
     const phone = cleanPhone(lead.whatsapp)
     window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank')
   }
@@ -461,37 +497,71 @@ function NegotiationsPage({ profile, profiles, services, leads, activities, relo
     reload()
   }
 
-  return <div className="grid gap negotiations-page">
-    <section className="section-title"><div><h3>Processo de negociação</h3><p>O vendedor usa o próprio WhatsApp, e o CRM registra apenas as negociações iniciadas por aqui.</p></div><span className="badge ok">Privacidade preservada</span></section>
-    <div className="negotiation-shell">
-      <aside className="card conversations-card">
-        <div className="form-head"><div><h3>Leads em atendimento</h3><p className="muted">{filtered.length} lead(s) encontrados</p></div></div>
-        <div className="mini-filters"><input placeholder="Buscar lead..." value={search} onChange={e => setSearch(e.target.value)} /><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="todos">Todos</option>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></div>
-        <div className="conversation-list">
-          {filtered.map(l => <button key={l.id} type="button" className={`conversation-item ${lead?.id === l.id ? 'active' : ''}`} onClick={() => setSelectedId(l.id)}>
-            <div className="conversation-avatar">{(l.client_name || '?').slice(0, 1).toUpperCase()}</div>
-            <div><b>{l.client_name}</b><small>{l.company_name || l.whatsapp || 'Sem empresa'}</small><p>{statusLabel(l.status)} • {money(l.proposal_value)}</p></div>
-          </button>)}
-          {!filtered.length && <p className="empty">Nenhum lead encontrado. Cadastre um lead primeiro.</p>}
+  return <div className="grid gap negotiations-page clean-negotiations">
+    <section className="section-title compact-section-title"><div><h3>Negociações pelo WhatsApp</h3><p>Controle simples do processo comercial sem acessar conversas pessoais do vendedor.</p></div><span className="badge ok">WhatsApp do vendedor</span></section>
+
+    <div className="stats compact-stats"><Stat label="Leads filtrados" value={filtered.length} hint="Na busca atual" /><Stat label="Em aberto" value={activeCount} hint="Precisam de acompanhamento" /><Stat label="Com proposta" value={sentProposals} hint="Valor informado" /><Stat label="Retornos" value={followUps} hint="Agendados" /></div>
+
+    {profile.role === 'admin' && <section className="card template-card">
+      <div className="form-head"><div><h3>Mensagem automática do WhatsApp</h3><p className="muted">Essa mensagem aparece quando o vendedor clicar em Iniciar WhatsApp.</p></div></div>
+      <form onSubmit={saveTemplate} className="template-grid">
+        <label>Mensagem padrão<textarea rows="5" value={templateDraft} onChange={e => setTemplateDraft(e.target.value)} /></label>
+        <div className="template-side"><h4>Variáveis disponíveis</h4><div className="chips"><span>{'{vendedor}'}</span><span>{'{cliente}'}</span><span>{'{empresa}'}</span><span>{'{servico}'}</span><span>{'{valor}'}</span></div><button className="primary" type="submit">Salvar mensagem</button></div>
+      </form>
+      <div className="message-preview"><small>Prévia com o lead selecionado</small><p>{lead ? initialMessage(lead) : renderTemplate(templateDraft, { vendedor: profile.name, cliente: 'Cliente', empresa: 'Empresa', servico: 'Site profissional', valor: money(1599) })}</p></div>
+    </section>}
+
+    <section className="card negotiation-toolbar clean-toolbar">
+      <input placeholder="Buscar por cliente, empresa, telefone ou e-mail..." value={search} onChange={e => setSearch(e.target.value)} />
+      <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="todos">Todos os status</option>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
+    </section>
+
+    <div className="negotiation-shell clean-shell">
+      <aside className="card lead-selector-card">
+        <div className="form-head"><div><h3>Leads</h3><p className="muted">Escolha um lead para acompanhar.</p></div></div>
+        <div className="simple-lead-list">
+          {filtered.map(l => {
+            const s = services.find(item => item.id === l.service_id)
+            const v = profiles.find(p => p.id === l.vendedor_id)
+            return <button key={l.id} type="button" className={`simple-lead ${lead?.id === l.id ? 'active' : ''}`} onClick={() => setSelectedId(l.id)}>
+              <div><b>{l.client_name}</b><small>{l.company_name || l.whatsapp || 'Sem empresa'}</small></div>
+              <div className="simple-lead-meta"><span>{statusLabel(l.status)}</span><small>{s?.name || 'Sem serviço'} • {v?.name || '-'}</small></div>
+            </button>
+          })}
+          {!filtered.length && <p className="empty">Nenhum lead encontrado.</p>}
         </div>
       </aside>
 
-      <section className="card negotiation-card">
-        {!lead ? <div className="empty-chat"><h3>Nenhum lead selecionado</h3><p>Selecione um lead para iniciar o atendimento pelo WhatsApp e acompanhar o processo comercial.</p></div> : <>
-          <div className="chat-head negotiation-head">
-            <div><h3>{lead.client_name}</h3><p>{lead.company_name || 'Sem empresa'} • {lead.whatsapp || 'Sem WhatsApp'} • Vendedor: {seller?.name || '-'}</p><small>Serviço: {service?.name || '-'} • Proposta: {money(lead.proposal_value)}</small></div>
-            <div className="chat-actions"><select value={lead.status || 'novo'} onChange={e => changeStatus(e.target.value)}>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select><button type="button" onClick={startWhatsApp}>Iniciar WhatsApp</button><button type="button" onClick={copyMessage}>Copiar mensagem</button></div>
+      <section className="card negotiation-detail-card">
+        {!lead ? <div className="empty-chat"><h3>Nenhum lead selecionado</h3><p>Cadastre um lead primeiro ou altere os filtros.</p></div> : <>
+          <div className="negotiation-summary">
+            <div><span>Cliente</span><h3>{lead.client_name}</h3><p>{lead.company_name || 'Sem empresa'} • {lead.whatsapp || 'Sem WhatsApp'}</p></div>
+            <div className="summary-badges"><span className="badge">{statusLabel(lead.status)}</span><strong>{money(lead.proposal_value)}</strong></div>
           </div>
 
-          <div className="negotiation-panels">
-            <form className="mini-card" onSubmit={saveNote}><h4>Registrar conversa</h4><select value={noteType} onChange={e => setNoteType(e.target.value)}><option value="observacao">Resumo da conversa</option><option value="objecao">Objeção do cliente</option><option value="retorno">Retorno feito</option><option value="proposta">Proposta enviada</option><option value="fechamento">Fechamento</option></select><textarea rows="4" placeholder="Ex: Cliente pediu para enviar proposta com site completo e galeria. Ficou de responder amanhã." value={note} onChange={e => setNote(e.target.value)} /><button className="primary">Salvar registro</button></form>
+          <div className="lead-info-grid">
+            <div><small>Serviço</small><b>{service?.name || '-'}</b></div>
+            <div><small>Vendedor</small><b>{seller?.name || '-'}</b></div>
+            <div><small>Próximo retorno</small><b>{lead.next_contact_at || '-'}</b></div>
+          </div>
+
+          <div className="primary-actions-grid">
+            <select value={lead.status || 'novo'} onChange={e => changeStatus(e.target.value)}>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
+            <button type="button" className="primary" onClick={startWhatsApp}>Iniciar WhatsApp</button>
+            <button type="button" onClick={copyMessage}>Copiar mensagem</button>
+          </div>
+
+          <div className="message-preview seller-preview"><small>Mensagem que será enviada</small><p>{initialMessage(lead)}</p></div>
+
+          <div className="negotiation-actions-clean">
+            <form className="mini-card" onSubmit={saveNote}><h4>Registrar atualização</h4><select value={noteType} onChange={e => setNoteType(e.target.value)}><option value="observacao">Resumo da conversa</option><option value="objecao">Objeção do cliente</option><option value="retorno">Retorno feito</option><option value="proposta">Proposta enviada</option><option value="fechamento">Fechamento</option></select><textarea rows="4" placeholder="Ex: Cliente pediu proposta e ficou de responder amanhã." value={note} onChange={e => setNote(e.target.value)} /><button className="primary">Salvar no histórico</button></form>
             <form className="mini-card" onSubmit={saveProposal}><h4>Proposta</h4><input type="number" step="0.01" placeholder="Valor negociado" value={proposalValue} onChange={e => setProposalValue(e.target.value)} /><button>Registrar proposta</button></form>
-            <form className="mini-card" onSubmit={saveNextContact}><h4>Próximo retorno</h4><input type="date" value={nextContact} onChange={e => setNextContact(e.target.value)} /><button>Agendar retorno</button></form>
+            <form className="mini-card" onSubmit={saveNextContact}><h4>Retorno</h4><input type="date" value={nextContact} onChange={e => setNextContact(e.target.value)} /><button>Agendar retorno</button></form>
           </div>
 
-          <div className="timeline-card"><div className="form-head"><div><h3>Linha do tempo</h3><p className="muted">Admin vê somente os registros feitos no CRM, não as conversas pessoais do WhatsApp do vendedor.</p></div></div><div className="timeline">
+          <div className="timeline-card clean-timeline"><div className="form-head"><div><h3>Histórico da negociação</h3><p className="muted">Somente registros do CRM aparecem aqui.</p></div></div><div className="timeline">
             {leadActivities.map(a => { const author = profiles.find(p => p.id === a.user_id); return <article key={a.id} className="timeline-item"><div className="timeline-dot" /><div><div className="timeline-top"><b>{typeLabel(a.type)}</b><small>{formatDateTime(a.created_at)}</small></div><p>{a.description}</p><small>Registrado por: {author?.name || 'Sistema'}</small>{profile.role === 'admin' && <button className="link-danger" onClick={() => deleteActivity(a.id)}>Excluir registro</button>}</div></article> })}
-            {!leadActivities.length && <p className="empty">Nenhum registro ainda. Clique em Iniciar WhatsApp ou registre o resumo da conversa.</p>}
+            {!leadActivities.length && <p className="empty">Nenhum registro ainda. Clique em Iniciar WhatsApp ou registre uma atualização.</p>}
           </div></div>
         </>}
       </section>
@@ -513,6 +583,7 @@ function App() {
   const [leads, setLeads] = useState([])
   const [loginLogs, setLoginLogs] = useState([])
   const [activities, setActivities] = useState([])
+  const [settings, setSettings] = useState({})
   const [page, setPage] = useState('dashboard')
   const [loading, setLoading] = useState(true)
   const [loginLoading, setLoginLoading] = useState(false)
@@ -563,20 +634,22 @@ function App() {
 
   async function loadData(currentProfile = profile) {
     if (!currentProfile) return
-    const [profilesRes, servicesRes, leadsRes, loginLogsRes, activitiesRes] = await Promise.all([
+    const [profilesRes, servicesRes, leadsRes, loginLogsRes, activitiesRes, settingsRes] = await Promise.all([
       supabase.from('profiles').select('*').order('created_at', { ascending: false }),
       supabase.from('services').select('*').order('sort_order', { ascending: true }),
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
       currentProfile.role === 'admin'
         ? supabase.from('login_logs').select('*').order('created_at', { ascending: false }).limit(500)
         : Promise.resolve({ data: [], error: null }),
-      supabase.from('activities').select('*').order('created_at', { ascending: false }).limit(1500)
+      supabase.from('activities').select('*').order('created_at', { ascending: false }).limit(1500),
+      supabase.from('app_settings').select('*')
     ])
     if (profilesRes.error) notify(profilesRes.error.message, 'danger'); else setProfiles(profilesRes.data || [])
     if (servicesRes.error) notify(servicesRes.error.message, 'danger'); else setServices(servicesRes.data || [])
     if (leadsRes.error) notify(leadsRes.error.message, 'danger'); else setLeads(leadsRes.data || [])
     if (loginLogsRes.error && currentProfile.role === 'admin') notify(loginLogsRes.error.message, 'danger'); else setLoginLogs(loginLogsRes.data || [])
     if (activitiesRes.error) setActivities([]); else setActivities(activitiesRes.data || [])
+    if (settingsRes.error) setSettings({}); else setSettings(Object.fromEntries((settingsRes.data || []).map(item => [item.key, item.value])))
   }
 
   useEffect(() => {
@@ -626,7 +699,7 @@ function App() {
     finally { setLoginLoading(false) }
   }
 
-  async function logout() { await supabase.auth.signOut(); setSession(null); setProfile(null); setProfiles([]); setLeads([]); setLoginLogs([]); setActivities([]) }
+  async function logout() { await supabase.auth.signOut(); setSession(null); setProfile(null); setProfiles([]); setLeads([]); setLoginLogs([]); setActivities([]); setSettings({}) }
 
   const visibleLeads = useMemo(() => leads, [leads])
   const titles = { dashboard: 'Dashboard', leads: 'Leads / Clientes', negociacoes: 'Negociações', servicos: 'Serviços e valores', comissoes: 'Comissões', vendedores: 'Vendedores', login_logs: 'Registros de login', config: 'Configurações' }
@@ -639,7 +712,7 @@ function App() {
     <Layout page={page} setPage={setPage} profile={profile} onLogout={logout} onInstallApp={installApp} title={titles[page] || 'RN CRM Vendas'}>
       {page === 'dashboard' && <Dashboard leads={visibleLeads} profiles={profiles} profile={profile} />}
       {page === 'leads' && <LeadsPage profile={profile} profiles={profiles} services={services} leads={visibleLeads} reload={() => loadData(profile)} notify={notify} />}
-      {page === 'negociacoes' && <NegotiationsPage profile={profile} profiles={profiles} services={services} leads={visibleLeads} activities={activities} reload={() => loadData(profile)} notify={notify} />}
+      {page === 'negociacoes' && <NegotiationsPage profile={profile} profiles={profiles} services={services} leads={visibleLeads} activities={activities} settings={settings} reload={() => loadData(profile)} notify={notify} />}
       {page === 'servicos' && <ServicesPage profile={profile} services={services} reload={() => loadData(profile)} notify={notify} />}
       {page === 'comissoes' && <CommissionsPage leads={visibleLeads} profiles={profiles} />}
       {page === 'vendedores' && profile.role === 'admin' && <SellersPage profiles={profiles} reload={() => loadData(profile)} notify={notify} session={session} />}

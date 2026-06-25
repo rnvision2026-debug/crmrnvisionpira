@@ -72,6 +72,13 @@ create table if not exists public.login_logs (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.app_settings (
+  key text primary key,
+  value text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- Garante colunas em bancos antigos
 alter table public.profiles add column if not exists phone text;
 alter table public.profiles add column if not exists active boolean default true;
@@ -140,6 +147,15 @@ alter table public.login_logs add column if not exists user_agent text;
 alter table public.login_logs add column if not exists created_at timestamptz default now();
 update public.login_logs set created_at = now() where created_at is null;
 
+alter table public.app_settings add column if not exists value text;
+alter table public.app_settings add column if not exists created_at timestamptz default now();
+alter table public.app_settings add column if not exists updated_at timestamptz default now();
+insert into public.app_settings (key, value)
+values ('whatsapp_template', 'Olá, tudo bem? Aqui é o {vendedor}, da RN Vision Pira.
+
+Vi que você tem interesse em {servico}. Posso te explicar as opções e valores?')
+on conflict (key) do nothing;
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -158,6 +174,9 @@ create trigger trg_services_updated_at before update on public.services for each
 
 drop trigger if exists trg_leads_updated_at on public.leads;
 create trigger trg_leads_updated_at before update on public.leads for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_app_settings_updated_at on public.app_settings;
+create trigger trg_app_settings_updated_at before update on public.app_settings for each row execute function public.set_updated_at();
 
 create or replace function public.is_admin()
 returns boolean
@@ -179,6 +198,7 @@ alter table public.services enable row level security;
 alter table public.leads enable row level security;
 alter table public.activities enable row level security;
 alter table public.login_logs enable row level security;
+alter table public.app_settings enable row level security;
 
 drop policy if exists profiles_select on public.profiles;
 drop policy if exists profiles_update_admin on public.profiles;
@@ -203,6 +223,11 @@ drop policy if exists activities_delete_admin on public.activities;
 drop policy if exists login_logs_select_admin on public.login_logs;
 drop policy if exists login_logs_insert_self on public.login_logs;
 drop policy if exists login_logs_delete_admin on public.login_logs;
+
+drop policy if exists app_settings_select on public.app_settings;
+drop policy if exists app_settings_insert_admin on public.app_settings;
+drop policy if exists app_settings_update_admin on public.app_settings;
+drop policy if exists app_settings_delete_admin on public.app_settings;
 
 create policy profiles_select on public.profiles
 for select using (public.is_admin() or id = auth.uid());
@@ -269,6 +294,18 @@ create policy login_logs_insert_self on public.login_logs
 for insert with check (user_id = auth.uid());
 
 create policy login_logs_delete_admin on public.login_logs
+for delete using (public.is_admin());
+
+create policy app_settings_select on public.app_settings
+for select using (true);
+
+create policy app_settings_insert_admin on public.app_settings
+for insert with check (public.is_admin());
+
+create policy app_settings_update_admin on public.app_settings
+for update using (public.is_admin()) with check (public.is_admin());
+
+create policy app_settings_delete_admin on public.app_settings
 for delete using (public.is_admin());
 
 notify pgrst, 'reload schema';

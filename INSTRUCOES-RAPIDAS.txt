@@ -1,29 +1,16 @@
-RN CRM Vendas - Negociação via WhatsApp do Vendedor
+RN CRM Vendas - Negociações simplificadas
 
-1) Suba no GitHub os arquivos desta pasta.
-
-2) Não suba:
-   node_modules
-   dist
-   .env
-   package-lock.json
-
-3) No Netlify:
-   Base directory: deixe em branco
+1. Extraia o ZIP.
+2. Suba os arquivos no GitHub.
+3. Não suba node_modules, dist, .env ou package-lock.json.
+4. No Netlify configure:
    Build command: npm run build
    Publish directory: dist
+   Base directory: deixe em branco
+5. Configure as variáveis do Supabase no Netlify.
+6. Rode no Supabase o arquivo supabase/ATUALIZAR-BANCO.sql.
+7. Faça Deploy project without cache.
 
-4) Variáveis no Netlify:
-   VITE_SUPABASE_URL
-   VITE_SUPABASE_ANON_KEY
-   SUPABASE_SERVICE_ROLE_KEY
-
-5) No Supabase:
-   Se for banco novo, rode supabase/schema.sql.
-   Se já usa o CRM, rode supabase/ATUALIZAR-BANCO.sql.
-
-6) Como funciona a negociação:
-   O vendedor seleciona o lead, clica em Iniciar WhatsApp e conversa pelo WhatsApp dele.
-   O CRM salva apenas o histórico que ele registrar: resumo, objeção, proposta, retorno e status.
-
-7) Depois do deploy, remova o app/atalho antigo e instale novamente se quiser atualizar o ícone/PWA.
+Novidade:
+- Admin altera a mensagem automática em Negociações.
+- Use variáveis: {vendedor}, {cliente}, {empresa}, {servico}, {valor}.
