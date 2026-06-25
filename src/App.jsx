@@ -65,7 +65,7 @@ function Login({ onLogin, loading, error }) {
 
 function Sidebar({ page, setPage, profile, onLogout, open, onClose }) {
   const items = [
-    ['dashboard', 'Dashboard', '📊'], ['leads', 'Leads', '👥'], ['servicos', 'Serviços e valores', '💼'], ['comissoes', 'Comissões', '💰'],
+    ['dashboard', 'Dashboard', '📊'], ['leads', 'Leads', '👥'], ['whatsapp', 'WhatsApp', '💬'], ['servicos', 'Serviços e valores', '💼'], ['comissoes', 'Comissões', '💰'],
     ...(profile.role === 'admin' ? [['vendedores', 'Vendedores', '🧑‍💼'], ['login_logs', 'Registros de login', '🕘']] : []), ['config', 'Configurações', '⚙️']
   ]
   function navigate(id) {
@@ -255,14 +255,26 @@ function SellersPage({ profiles, reload, notify, session }) {
   const [reset, setReset] = useState({ user_id: '', password: '' })
   const sellers = profiles.filter(p => p.role === 'vendedor')
   function set(key, value) { setForm(prev => ({ ...prev, [key]: value })) }
+  async function getFreshAccessToken() {
+    const { data, error } = await supabase.auth.getSession()
+    if (error) throw error
+    const token = data?.session?.access_token || session?.access_token
+    if (!token) throw new Error('Sessão expirada. Saia do sistema e entre novamente.')
+    return token
+  }
   async function createSeller(e) {
     e.preventDefault()
-    const res = await fetch('/.netlify/functions/create-seller', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify(form)
-    })
-    const data = await res.json()
-    if (!res.ok) return notify(data.error || 'Erro ao criar vendedor.', 'danger')
-    setForm(blankSeller); notify('Vendedor criado com login próprio.', 'ok'); reload()
+    try {
+      const token = await getFreshAccessToken()
+      const res = await fetch('/.netlify/functions/create-seller', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(form)
+      })
+      const data = await res.json()
+      if (!res.ok) return notify(data.error || 'Erro ao criar vendedor.', 'danger')
+      setForm(blankSeller); notify('Vendedor criado com login próprio.', 'ok'); reload()
+    } catch (err) {
+      notify(err.message || 'Erro ao criar vendedor.', 'danger')
+    }
   }
   async function toggleSeller(seller) {
     const { error } = await supabase.from('profiles').update({ active: !seller.active }).eq('id', seller.id)
@@ -276,10 +288,15 @@ function SellersPage({ profiles, reload, notify, session }) {
   }
   async function resetPassword(e) {
     e.preventDefault()
-    const res = await fetch('/.netlify/functions/reset-seller-password', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify(reset) })
-    const data = await res.json()
-    if (!res.ok) return notify(data.error || 'Erro ao trocar senha.', 'danger')
-    setReset({ user_id: '', password: '' }); notify('Senha alterada.', 'ok')
+    try {
+      const token = await getFreshAccessToken()
+      const res = await fetch('/.netlify/functions/reset-seller-password', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(reset) })
+      const data = await res.json()
+      if (!res.ok) return notify(data.error || 'Erro ao trocar senha.', 'danger')
+      setReset({ user_id: '', password: '' }); notify('Senha alterada.', 'ok')
+    } catch (err) {
+      notify(err.message || 'Erro ao trocar senha.', 'danger')
+    }
   }
   return <div className="grid gap">
     <form className="card form" onSubmit={createSeller}><h3>Cadastrar vendedor direto no CRM</h3><p className="muted">O sistema cria o usuário no Supabase Auth e o perfil de vendedor automaticamente.</p><div className="form-grid"><label>Nome<input value={form.name} onChange={e => set('name', e.target.value)} required /></label><label>E-mail<input type="email" value={form.email} onChange={e => set('email', e.target.value)} required /></label><label>Senha inicial<input type="password" value={form.password} onChange={e => set('password', e.target.value)} minLength="6" required /></label><label>WhatsApp<input value={form.phone} onChange={e => set('phone', e.target.value)} /></label><label>Comissão<select value={form.commission_rate} onChange={e => set('commission_rate', Number(e.target.value))}><option value="0.15">15%</option><option value="0.10">10%</option><option value="0.20">20%</option></select></label></div><button className="primary">Criar vendedor com login</button></form>
@@ -334,6 +351,137 @@ function LoginLogsPage({ loginLogs, profiles, reload }) {
   </div>
 }
 
+
+function WhatsAppPage({ profile, profiles, conversations, messages, leads, reload, notify, session }) {
+  const [selectedId, setSelectedId] = useState('')
+  const [search, setSearch] = useState('')
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [statusFilter, setStatusFilter] = useState('todos')
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return conversations.filter(c => {
+      const matchSearch = !q || [c.contact_name, c.contact_phone, c.last_message].filter(Boolean).join(' ').toLowerCase().includes(q)
+      const matchStatus = statusFilter === 'todos' || c.status === statusFilter
+      return matchSearch && matchStatus
+    })
+  }, [conversations, search, statusFilter])
+
+  useEffect(() => {
+    if (!selectedId && filtered[0]) setSelectedId(filtered[0].id)
+    if (selectedId && !filtered.some(c => c.id === selectedId) && filtered[0]) setSelectedId(filtered[0].id)
+  }, [filtered, selectedId])
+
+  const conversation = conversations.find(c => c.id === selectedId) || filtered[0]
+  const conversationMessages = conversation ? messages.filter(m => m.conversation_id === conversation.id) : []
+  const assignedSeller = conversation ? profiles.find(p => p.id === conversation.seller_id) : null
+  const linkedLead = conversation ? leads.find(l => l.id === conversation.lead_id) : null
+
+  async function assignSeller(sellerId) {
+    if (!conversation) return
+    const { error } = await supabase.from('whatsapp_conversations').update({ seller_id: sellerId || null }).eq('id', conversation.id)
+    if (error) return notify(error.message, 'danger')
+    notify('Atendimento atribuído.', 'ok')
+    reload()
+  }
+
+  async function changeStatus(nextStatus) {
+    if (!conversation) return
+    const { error } = await supabase.from('whatsapp_conversations').update({ status: nextStatus }).eq('id', conversation.id)
+    if (error) return notify(error.message, 'danger')
+    notify('Status do atendimento atualizado.', 'ok')
+    reload()
+  }
+
+  async function createLeadFromConversation() {
+    if (!conversation) return
+    const sellerId = conversation.seller_id || (profile.role === 'vendedor' ? profile.id : '')
+    if (!sellerId) return notify('Atribua um vendedor antes de transformar em lead.', 'danger')
+    const payload = {
+      vendedor_id: sellerId,
+      client_name: conversation.contact_name || `Contato ${conversation.contact_phone}`,
+      company_name: '',
+      whatsapp: conversation.contact_phone,
+      email: '',
+      origin: 'WhatsApp CRM',
+      status: 'em_atendimento',
+      proposal_value: 0,
+      notes: 'Lead criado a partir do atendimento WhatsApp.',
+      next_contact_at: null
+    }
+    const { data, error } = await supabase.from('leads').insert(payload).select('id').single()
+    if (error) return notify(error.message, 'danger')
+    await supabase.from('whatsapp_conversations').update({ lead_id: data.id }).eq('id', conversation.id)
+    notify('Lead criado e vinculado ao atendimento.', 'ok')
+    reload()
+  }
+
+  async function sendMessage(e) {
+    e?.preventDefault()
+    if (!conversation) return notify('Selecione um atendimento.', 'danger')
+    const message = text.trim()
+    if (!message) return notify('Digite a mensagem.', 'danger')
+    try {
+      setSending(true)
+      const token = session?.access_token
+      const response = await fetch('/.netlify/functions/send-whatsapp-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ conversation_id: conversation.id, message })
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Erro ao enviar mensagem pelo WhatsApp.')
+      setText('')
+      notify('Mensagem enviada pelo WhatsApp.', 'ok')
+      reload()
+    } catch (err) {
+      notify(err.message || 'Erro ao enviar WhatsApp.', 'danger')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return <div className="grid gap whatsapp-page">
+    <section className="section-title"><div><h3>Atendimentos WhatsApp</h3><p>Centralize as conversas do número da RN Vision Pira e acompanhe a negociação de cada vendedor.</p></div><span className="badge ok">Cloud API</span></section>
+    <div className="whatsapp-shell">
+      <aside className="card conversations-card">
+        <div className="form-head"><div><h3>Conversas</h3><p className="muted">{filtered.length} atendimento(s)</p></div></div>
+        <div className="mini-filters"><input placeholder="Buscar contato..." value={search} onChange={e => setSearch(e.target.value)} /><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="todos">Todos</option><option value="novo">Novo</option><option value="em_atendimento">Em atendimento</option><option value="proposta_enviada">Proposta enviada</option><option value="negociacao">Negociação</option><option value="fechado">Fechado</option><option value="perdido">Perdido</option></select></div>
+        <div className="conversation-list">
+          {filtered.map(c => <button key={c.id} type="button" className={`conversation-item ${conversation?.id === c.id ? 'active' : ''}`} onClick={() => setSelectedId(c.id)}>
+            <div className="conversation-avatar">{(c.contact_name || c.contact_phone || '?').slice(0, 1).toUpperCase()}</div>
+            <div><b>{c.contact_name || c.contact_phone}</b><small>{c.contact_phone}</small><p>{c.last_message || 'Sem mensagens ainda.'}</p></div>
+            {!!c.unread_count && <span className="unread-dot">{c.unread_count}</span>}
+          </button>)}
+          {!filtered.length && <p className="empty">Nenhuma conversa recebida ainda. Assim que o cliente mandar mensagem no WhatsApp da RN Vision Pira, ela aparece aqui.</p>}
+        </div>
+      </aside>
+
+      <section className="card chat-card">
+        {!conversation ? <div className="empty-chat"><h3>Nenhuma conversa selecionada</h3><p>Configure o webhook da Meta e aguarde uma mensagem entrar pelo WhatsApp.</p></div> : <>
+          <div className="chat-head">
+            <div><h3>{conversation.contact_name || conversation.contact_phone}</h3><p>{conversation.contact_phone} {assignedSeller ? `• Atendente: ${assignedSeller.name}` : '• Sem vendedor atribuído'}</p>{linkedLead && <small>Lead vinculado: {linkedLead.client_name}</small>}</div>
+            <div className="chat-actions">
+              <select value={conversation.status || 'novo'} onChange={e => changeStatus(e.target.value)}>{STATUS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
+              {profile.role === 'admin' && <select value={conversation.seller_id || ''} onChange={e => assignSeller(e.target.value)}><option value="">Atribuir vendedor</option>{profiles.filter(p => p.role === 'vendedor' && p.active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+              {!conversation.lead_id && <button type="button" onClick={createLeadFromConversation}>Criar lead</button>}
+            </div>
+          </div>
+          <div className="chat-window">
+            {conversationMessages.map(m => <div key={m.id} className={`message-bubble ${m.direction}`}><div><p>{m.message}</p><small>{m.sender_name || (m.direction === 'inbound' ? conversation.contact_name || 'Cliente' : 'RN Vision Pira')} • {formatDateTime(m.created_at)}</small></div></div>)}
+            {!conversationMessages.length && <p className="empty">Nenhuma mensagem nesse atendimento.</p>}
+          </div>
+          <form className="chat-composer" onSubmit={sendMessage}>
+            <textarea rows="3" value={text} onChange={e => setText(e.target.value)} placeholder={assignedSeller || profile.role === 'admin' ? 'Digite a resposta para o cliente...' : 'Aguarde o admin atribuir um vendedor.'} disabled={profile.role !== 'admin' && conversation.seller_id !== profile.id} />
+            <div><small>A mensagem será enviada com identificação do atendente, ex: {profile.name} | RN Vision Pira.</small><button className="primary" disabled={sending || (profile.role !== 'admin' && conversation.seller_id !== profile.id)}>{sending ? 'Enviando...' : 'Enviar WhatsApp'}</button></div>
+          </form>
+        </>}
+      </section>
+    </div>
+  </div>
+}
+
 function ConfigPage({ profile, onLogout, onInstallApp, isStandalone }) {
   return <div className="grid gap"><section className="card"><div className="form-head"><div><h3>Configurações</h3><p>O sistema está conectado ao Supabase e hospedado para rodar via Netlify.</p></div><button className="logout-top" type="button" onClick={onLogout}>Sair do sistema</button></div><div className="info-grid"><div><small>Usuário</small><b>{profile.name}</b></div><div><small>Perfil</small><b>{profile.role}</b></div><div><small>Status</small><b>{profile.active ? 'Ativo' : 'Bloqueado'}</b></div></div></section><section className="card pwa-card"><h3>Instalar como aplicativo</h3><p className="muted">Para abrir como programa no computador, use este botão ou o botão de instalação do Chrome/Edge. Depois remova qualquer atalho antigo e instale novamente.</p><button className="primary" type="button" onClick={onInstallApp}>{isStandalone ? 'Aplicativo já instalado' : 'Instalar aplicativo'}</button></section><section className="card"><h3>Variáveis necessárias no Netlify</h3><pre>VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
@@ -347,6 +495,8 @@ function App() {
   const [services, setServices] = useState([])
   const [leads, setLeads] = useState([])
   const [loginLogs, setLoginLogs] = useState([])
+  const [whatsappConversations, setWhatsappConversations] = useState([])
+  const [whatsappMessages, setWhatsappMessages] = useState([])
   const [page, setPage] = useState('dashboard')
   const [loading, setLoading] = useState(true)
   const [loginLoading, setLoginLoading] = useState(false)
@@ -397,18 +547,22 @@ function App() {
 
   async function loadData(currentProfile = profile) {
     if (!currentProfile) return
-    const [profilesRes, servicesRes, leadsRes, loginLogsRes] = await Promise.all([
+    const [profilesRes, servicesRes, leadsRes, loginLogsRes, conversationsRes, messagesRes] = await Promise.all([
       supabase.from('profiles').select('*').order('created_at', { ascending: false }),
       supabase.from('services').select('*').order('sort_order', { ascending: true }),
       supabase.from('leads').select('*').order('created_at', { ascending: false }),
       currentProfile.role === 'admin'
         ? supabase.from('login_logs').select('*').order('created_at', { ascending: false }).limit(500)
-        : Promise.resolve({ data: [], error: null })
+        : Promise.resolve({ data: [], error: null }),
+      supabase.from('whatsapp_conversations').select('*').order('last_message_at', { ascending: false, nullsFirst: false }).limit(300),
+      supabase.from('whatsapp_messages').select('*').order('created_at', { ascending: true }).limit(1200)
     ])
     if (profilesRes.error) notify(profilesRes.error.message, 'danger'); else setProfiles(profilesRes.data || [])
     if (servicesRes.error) notify(servicesRes.error.message, 'danger'); else setServices(servicesRes.data || [])
     if (leadsRes.error) notify(leadsRes.error.message, 'danger'); else setLeads(leadsRes.data || [])
     if (loginLogsRes.error && currentProfile.role === 'admin') notify(loginLogsRes.error.message, 'danger'); else setLoginLogs(loginLogsRes.data || [])
+    if (conversationsRes.error) setWhatsappConversations([]); else setWhatsappConversations(conversationsRes.data || [])
+    if (messagesRes.error) setWhatsappMessages([]); else setWhatsappMessages(messagesRes.data || [])
   }
 
   useEffect(() => {
@@ -458,10 +612,10 @@ function App() {
     finally { setLoginLoading(false) }
   }
 
-  async function logout() { await supabase.auth.signOut(); setSession(null); setProfile(null); setProfiles([]); setLeads([]); setLoginLogs([]) }
+  async function logout() { await supabase.auth.signOut(); setSession(null); setProfile(null); setProfiles([]); setLeads([]); setLoginLogs([]); setWhatsappConversations([]); setWhatsappMessages([]) }
 
   const visibleLeads = useMemo(() => leads, [leads])
-  const titles = { dashboard: 'Dashboard', leads: 'Leads / Clientes', servicos: 'Serviços e valores', comissoes: 'Comissões', vendedores: 'Vendedores', login_logs: 'Registros de login', config: 'Configurações' }
+  const titles = { dashboard: 'Dashboard', leads: 'Leads / Clientes', whatsapp: 'Atendimentos WhatsApp', servicos: 'Serviços e valores', comissoes: 'Comissões', vendedores: 'Vendedores', login_logs: 'Registros de login', config: 'Configurações' }
 
   if (loading) return <Welcome />
   if (!session || !profile) return <><Login onLogin={login} loading={loginLoading} error={error} /><Toast {...toast} onClose={() => setToast({ message: '', type: '' })} /></>
@@ -471,6 +625,7 @@ function App() {
     <Layout page={page} setPage={setPage} profile={profile} onLogout={logout} onInstallApp={installApp} title={titles[page] || 'RN CRM Vendas'}>
       {page === 'dashboard' && <Dashboard leads={visibleLeads} profiles={profiles} profile={profile} />}
       {page === 'leads' && <LeadsPage profile={profile} profiles={profiles} services={services} leads={visibleLeads} reload={() => loadData(profile)} notify={notify} />}
+      {page === 'whatsapp' && <WhatsAppPage profile={profile} profiles={profiles} conversations={whatsappConversations} messages={whatsappMessages} leads={visibleLeads} reload={() => loadData(profile)} notify={notify} session={session} />}
       {page === 'servicos' && <ServicesPage profile={profile} services={services} reload={() => loadData(profile)} notify={notify} />}
       {page === 'comissoes' && <CommissionsPage leads={visibleLeads} profiles={profiles} />}
       {page === 'vendedores' && profile.role === 'admin' && <SellersPage profiles={profiles} reload={() => loadData(profile)} notify={notify} session={session} />}

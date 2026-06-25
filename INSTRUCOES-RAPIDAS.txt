@@ -1,26 +1,32 @@
-RN CRM Vendas — versão NPM/React Clean Responsiva + PWA
+RN CRM Vendas - WhatsApp Cloud API
 
-1. Suba no GitHub os arquivos desta pasta.
-2. Não suba: node_modules, dist, .env e package-lock.json.
-3. No Netlify use:
-   Base directory: deixe em branco
+1) Suba esta versão no GitHub.
+2) Netlify:
    Build command: npm run build
    Publish directory: dist
-4. Cadastre no Netlify:
+   Base directory: deixe em branco
+
+3) Cadastre no Netlify as variáveis:
    VITE_SUPABASE_URL
    VITE_SUPABASE_ANON_KEY
    SUPABASE_SERVICE_ROLE_KEY
-5. No Supabase, rode supabase/schema.sql.
-6. Crie o admin no Supabase Auth.
-7. Rode supabase/admin_setup.sql.
-8. Faça deploy no Netlify.
+   WHATSAPP_ACCESS_TOKEN
+   WHATSAPP_PHONE_NUMBER_ID
+   WHATSAPP_VERIFY_TOKEN
+   WHATSAPP_GRAPH_VERSION=v20.0
 
-Correções desta versão:
-- Visual branco, clean e mais profissional.
-- Menu responsivo: no celular/tablet ele fica fechado e abre pelo botão ☰.
-- Campos e cards mais compactos.
-- PWA com manifest, service worker e ícone do programa.
-- Vendedor altera status de lead.
-- Admin exclui lead.
+4) Supabase:
+   Rode supabase/schema.sql se for banco novo.
+   Se já existe, rode supabase/ATUALIZAR-BANCO.sql.
+   Crie o admin e rode supabase/admin_setup.sql.
 
-Se a instalação no computador ainda abrir como navegador, remova o atalho/app antigo e instale novamente após o deploy novo.
+5) Na Meta/WhatsApp Cloud API:
+   Callback URL:
+   https://SEU-SITE.netlify.app/.netlify/functions/whatsapp-webhook
+
+   Verify Token:
+   O mesmo valor cadastrado em WHATSAPP_VERIFY_TOKEN no Netlify.
+
+6) Assine o evento messages.
+
+7) Quando um cliente mandar mensagem para o WhatsApp da RN Vision Pira, a conversa aparece em Atendimentos WhatsApp.

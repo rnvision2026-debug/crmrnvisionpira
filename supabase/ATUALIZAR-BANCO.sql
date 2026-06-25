@@ -150,3 +150,130 @@ create policy login_logs_delete_admin on public.login_logs
 for delete using (public.is_admin());
 
 notify pgrst, 'reload schema';
+
+
+-- INTEGRACAO WHATSAPP CLOUD API
+create table if not exists public.whatsapp_conversations (
+  id uuid primary key default gen_random_uuid(),
+  contact_phone text not null,
+  contact_name text,
+  seller_id uuid references public.profiles(id) on delete set null,
+  lead_id uuid references public.leads(id) on delete set null,
+  status text not null default 'novo' check (status in ('novo','em_atendimento','proposta_enviada','negociacao','fechado','perdido')),
+  last_message text,
+  last_message_at timestamptz,
+  last_inbound_at timestamptz,
+  unread_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(contact_phone)
+);
+
+create table if not exists public.whatsapp_messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.whatsapp_conversations(id) on delete cascade,
+  direction text not null check (direction in ('inbound','outbound','system')),
+  sender_profile_id uuid references public.profiles(id) on delete set null,
+  sender_name text,
+  contact_phone text,
+  message text not null,
+  meta_message_id text unique,
+  meta_status text,
+  raw jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table public.whatsapp_conversations add column if not exists contact_phone text;
+alter table public.whatsapp_conversations add column if not exists contact_name text;
+alter table public.whatsapp_conversations add column if not exists seller_id uuid references public.profiles(id) on delete set null;
+alter table public.whatsapp_conversations add column if not exists lead_id uuid references public.leads(id) on delete set null;
+alter table public.whatsapp_conversations add column if not exists status text default 'novo';
+alter table public.whatsapp_conversations add column if not exists last_message text;
+alter table public.whatsapp_conversations add column if not exists last_message_at timestamptz;
+alter table public.whatsapp_conversations add column if not exists last_inbound_at timestamptz;
+alter table public.whatsapp_conversations add column if not exists unread_count integer default 0;
+alter table public.whatsapp_conversations add column if not exists created_at timestamptz default now();
+alter table public.whatsapp_conversations add column if not exists updated_at timestamptz default now();
+update public.whatsapp_conversations set status = 'novo' where status is null;
+update public.whatsapp_conversations set unread_count = 0 where unread_count is null;
+update public.whatsapp_conversations set created_at = now() where created_at is null;
+update public.whatsapp_conversations set updated_at = now() where updated_at is null;
+
+alter table public.whatsapp_messages add column if not exists conversation_id uuid references public.whatsapp_conversations(id) on delete cascade;
+alter table public.whatsapp_messages add column if not exists direction text;
+alter table public.whatsapp_messages add column if not exists sender_profile_id uuid references public.profiles(id) on delete set null;
+alter table public.whatsapp_messages add column if not exists sender_name text;
+alter table public.whatsapp_messages add column if not exists contact_phone text;
+alter table public.whatsapp_messages add column if not exists message text;
+alter table public.whatsapp_messages add column if not exists meta_message_id text;
+alter table public.whatsapp_messages add column if not exists meta_status text;
+alter table public.whatsapp_messages add column if not exists raw jsonb;
+alter table public.whatsapp_messages add column if not exists created_at timestamptz default now();
+update public.whatsapp_messages set created_at = now() where created_at is null;
+
+create unique index if not exists whatsapp_conversations_phone_key on public.whatsapp_conversations(contact_phone);
+create index if not exists whatsapp_conversations_seller_idx on public.whatsapp_conversations(seller_id);
+create index if not exists whatsapp_messages_conversation_idx on public.whatsapp_messages(conversation_id, created_at);
+
+alter table public.whatsapp_conversations enable row level security;
+alter table public.whatsapp_messages enable row level security;
+
+drop policy if exists whatsapp_conversations_select on public.whatsapp_conversations;
+drop policy if exists whatsapp_conversations_insert_admin on public.whatsapp_conversations;
+drop policy if exists whatsapp_conversations_update on public.whatsapp_conversations;
+drop policy if exists whatsapp_conversations_delete_admin on public.whatsapp_conversations;
+drop policy if exists whatsapp_messages_select on public.whatsapp_messages;
+drop policy if exists whatsapp_messages_insert on public.whatsapp_messages;
+drop policy if exists whatsapp_messages_delete_admin on public.whatsapp_messages;
+
+create policy whatsapp_conversations_select on public.whatsapp_conversations
+for select using (public.is_admin() or seller_id = auth.uid());
+
+create policy whatsapp_conversations_insert_admin on public.whatsapp_conversations
+for insert with check (public.is_admin());
+
+create policy whatsapp_conversations_update on public.whatsapp_conversations
+for update using (public.is_admin() or seller_id = auth.uid())
+with check (public.is_admin() or seller_id = auth.uid());
+
+create policy whatsapp_conversations_delete_admin on public.whatsapp_conversations
+for delete using (public.is_admin());
+
+create policy whatsapp_messages_select on public.whatsapp_messages
+for select using (
+  public.is_admin()
+  or exists (
+    select 1 from public.whatsapp_conversations c
+    where c.id = whatsapp_messages.conversation_id
+      and c.seller_id = auth.uid()
+  )
+);
+
+create policy whatsapp_messages_insert on public.whatsapp_messages
+for insert with check (
+  public.is_admin()
+  or exists (
+    select 1 from public.whatsapp_conversations c
+    where c.id = conversation_id
+      and c.seller_id = auth.uid()
+  )
+);
+
+create policy whatsapp_messages_delete_admin on public.whatsapp_messages
+for delete using (public.is_admin());
+
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_whatsapp_conversations_updated_at on public.whatsapp_conversations;
+create trigger trg_whatsapp_conversations_updated_at before update on public.whatsapp_conversations for each row execute function public.set_updated_at();
+
+notify pgrst, 'reload schema';

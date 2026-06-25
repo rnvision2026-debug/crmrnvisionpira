@@ -1,23 +1,23 @@
-# RN CRM Vendas — versão NPM/React Clean Corrigida
+# RN CRM Vendas — NPM/React + Supabase + Netlify + WhatsApp
 
-Sistema interno para vendedores da RN Vision Pira.
+Sistema interno de vendas da RN Vision Pira com visual clean, responsivo, PWA, login Supabase, cadastro de vendedores direto no CRM e central de atendimentos WhatsApp.
 
 ## O que vem pronto
 
 - Login com Supabase Auth.
 - Painel Admin e Painel do Vendedor.
-- Visual clean branco, organizado e profissional.
-- Tela de boas-vindas com a logo RN Vision Pira.
-- Cadastro de vendedores direto pelo CRM.
-- Criação automática do login do vendedor via Netlify Function corrigida, sem erro de WebSocket no Node 20.
-- Troca de senha do vendedor pelo painel.
+- Cadastro de vendedores direto no CRM via Netlify Function.
+- Troca de senha de vendedor pelo admin.
 - Cadastro de serviços e valores.
-- Campos de desenvolvimento, adesão + integração e mensalidade.
-- Cadastro de leads/clientes.
-- Status comercial.
-- Comissões automáticas.
-- Bônus por meta.
-- Deploy preparado para GitHub + Netlify + Supabase.
+- Leads/clientes com status comercial.
+- Comissões e bônus por meta.
+- Registros de login dos vendedores.
+- Menu responsivo e PWA com ícone.
+- Página **Atendimentos WhatsApp**.
+- Webhook para receber mensagens do WhatsApp Cloud API.
+- Envio de mensagens pelo CRM com identificação do vendedor.
+- Admin pode atribuir atendimento a vendedor.
+- Vendedor vê e responde apenas seus atendimentos.
 
 ## Como subir no GitHub
 
@@ -65,9 +65,13 @@ Em **Project configuration > Environment variables**, cadastre:
 VITE_SUPABASE_URL=https://isqiekclfdvekfwblhds.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_PvFYSb8eHJdWQyniCYpOiw_CPFHVOOD
 SUPABASE_SERVICE_ROLE_KEY=SUA_SERVICE_ROLE_KEY_DO_SUPABASE
+WHATSAPP_ACCESS_TOKEN=TOKEN_PERMANENTE_DA_META
+WHATSAPP_PHONE_NUMBER_ID=PHONE_NUMBER_ID_DA_META
+WHATSAPP_VERIFY_TOKEN=UM_TOKEN_CRIADO_POR_VOCE
+WHATSAPP_GRAPH_VERSION=v20.0
 ```
 
-A `SUPABASE_SERVICE_ROLE_KEY` é secreta e deve ficar somente no Netlify. Nunca coloque essa chave no GitHub.
+A `SUPABASE_SERVICE_ROLE_KEY` e `WHATSAPP_ACCESS_TOKEN` são secretas e devem ficar somente no Netlify. Nunca coloque essas chaves no GitHub.
 
 ## Supabase
 
@@ -82,6 +86,30 @@ admin@rnvision.com.br
 
 4. Execute `supabase/admin_setup.sql` no SQL Editor.
 
+Se você já tinha o banco criado, rode também:
+
+```txt
+supabase/ATUALIZAR-BANCO.sql
+```
+
+Esse arquivo atualiza o banco sem apagar dados.
+
+## Webhook do WhatsApp Cloud API
+
+Depois do deploy publicado, use esta URL na Meta:
+
+```txt
+https://SEU-SITE.netlify.app/.netlify/functions/whatsapp-webhook
+```
+
+No campo **Verify token**, use exatamente o mesmo valor da variável:
+
+```txt
+WHATSAPP_VERIFY_TOKEN
+```
+
+Depois assine o evento **messages** no webhook da Meta.
+
 ## Teste local opcional
 
 ```bash
@@ -91,53 +119,6 @@ npm run dev
 
 ## Build testado
 
-Esta versão foi testada com:
-
 ```bash
 npm run build
 ```
-
-
-
-## Correção incluída nesta versão
-
-Esta versão remove o uso do cliente Supabase JS dentro das Netlify Functions e usa chamadas seguras via API do Supabase no servidor. Isso corrige o erro:
-
-```txt
-Node.js 20 detected without native WebSocket support
-```
-
-O frontend continua usando Supabase normalmente para login e dados. A chave `SUPABASE_SERVICE_ROLE_KEY` continua protegida somente no Netlify.
-
-## Atualização incluída
-
-- Vendedor pode alterar o status dos próprios leads diretamente na tabela.
-- Admin pode excluir leads pelo botão **Excluir lead**.
-- O arquivo `supabase/ATUALIZAR-BANCO.sql` reforça as permissões no banco sem apagar dados.
-
-## Atualização de responsividade e PWA
-
-Esta versão também corrige:
-
-- Menu lateral no celular/tablet agora fica fechado e abre pelo botão ☰.
-- Menu fecha automaticamente ao escolher uma página.
-- Fundo escuro ao abrir o menu no mobile.
-- Campos, cards e tabelas mais compactos para não ficarem grandes demais.
-- Layout melhorado para telas pequenas, notebooks e desktop.
-- PWA configurado com `manifest.webmanifest`, `sw.js` e ícones.
-- Ao instalar pelo navegador, o sistema abre em modo aplicativo quando suportado pelo Chrome/Edge.
-- Ícone do RN CRM incluído para instalação.
-
-Para o modo aplicativo funcionar, suba no Netlify, abra o site pelo Chrome ou Edge e use a opção **Instalar app** ou **Adicionar à tela inicial**. Se abrir como navegador, remova a instalação antiga e instale novamente após o novo deploy publicado.
-
-## Atualização: registros de login
-
-Esta versão adiciona a página **Registros de login** para o administrador acompanhar os acessos dos vendedores com data, hora, e-mail, nome e dispositivo.
-
-Depois de subir esta versão no GitHub e fazer deploy no Netlify, rode no Supabase:
-
-```txt
-supabase/ATUALIZAR-BANCO.sql
-```
-
-Esse arquivo cria a tabela `login_logs` e as permissões necessárias. Ele não apaga os dados existentes.
