@@ -1,0 +1,311 @@
+-- RN CRM Vendas - Atualização segura do banco
+-- Rode no Supabase em: SQL Editor > New query > Run
+-- Não apaga dados existentes.
+
+create extension if not exists pgcrypto;
+
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  name text not null,
+  email text not null unique,
+  phone text,
+  role text not null default 'vendedor' check (role in ('admin','vendedor')),
+  active boolean not null default true,
+  commission_rate numeric(5,4) not null default 0.1500,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.services (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  category text not null default 'Sites',
+  description text,
+  development_price numeric(12,2) not null default 0,
+  setup_integration_price numeric(12,2) not null default 0,
+  monthly_price numeric(12,2) not null default 0,
+  payment_terms text,
+  delivery_time text,
+  sales_arguments text,
+  active boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.leads (
+  id uuid primary key default gen_random_uuid(),
+  vendedor_id uuid not null references public.profiles(id) on delete cascade,
+  service_id uuid references public.services(id) on delete set null,
+  client_name text not null,
+  company_name text,
+  whatsapp text,
+  email text,
+  origin text not null default 'WhatsApp',
+  status text not null default 'novo' check (status in ('novo','em_atendimento','proposta_enviada','negociacao','fechado','perdido')),
+  proposal_value numeric(12,2) not null default 0,
+  notes text,
+  next_contact_at date,
+  closed_at timestamptz,
+  loss_reason text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.activities (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.leads(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null default 'observacao',
+  description text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.login_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete set null,
+  email text,
+  name text,
+  role text,
+  device text,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.app_settings (
+  key text primary key,
+  value text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Garante colunas em bancos antigos
+alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists active boolean default true;
+alter table public.profiles add column if not exists commission_rate numeric(5,4) default 0.1500;
+alter table public.profiles add column if not exists role text default 'vendedor';
+alter table public.profiles add column if not exists created_at timestamptz default now();
+alter table public.profiles add column if not exists updated_at timestamptz default now();
+update public.profiles set active = true where active is null;
+update public.profiles set commission_rate = 0.1500 where commission_rate is null;
+update public.profiles set role = 'vendedor' where role is null;
+update public.profiles set created_at = now() where created_at is null;
+update public.profiles set updated_at = now() where updated_at is null;
+
+alter table public.services add column if not exists category text default 'Sites';
+alter table public.services add column if not exists description text;
+alter table public.services add column if not exists development_price numeric(12,2) default 0;
+alter table public.services add column if not exists setup_integration_price numeric(12,2) default 0;
+alter table public.services add column if not exists monthly_price numeric(12,2) default 0;
+alter table public.services add column if not exists payment_terms text;
+alter table public.services add column if not exists delivery_time text;
+alter table public.services add column if not exists sales_arguments text;
+alter table public.services add column if not exists active boolean default true;
+alter table public.services add column if not exists sort_order integer default 0;
+alter table public.services add column if not exists created_at timestamptz default now();
+alter table public.services add column if not exists updated_at timestamptz default now();
+update public.services set category = 'Sites' where category is null;
+update public.services set development_price = 0 where development_price is null;
+update public.services set setup_integration_price = 0 where setup_integration_price is null;
+update public.services set monthly_price = 0 where monthly_price is null;
+update public.services set active = true where active is null;
+update public.services set sort_order = 0 where sort_order is null;
+update public.services set created_at = now() where created_at is null;
+update public.services set updated_at = now() where updated_at is null;
+
+alter table public.leads add column if not exists service_id uuid references public.services(id) on delete set null;
+alter table public.leads add column if not exists company_name text;
+alter table public.leads add column if not exists whatsapp text;
+alter table public.leads add column if not exists email text;
+alter table public.leads add column if not exists origin text default 'WhatsApp';
+alter table public.leads add column if not exists proposal_value numeric(12,2) default 0;
+alter table public.leads add column if not exists notes text;
+alter table public.leads add column if not exists next_contact_at date;
+alter table public.leads add column if not exists closed_at timestamptz;
+alter table public.leads add column if not exists loss_reason text;
+alter table public.leads add column if not exists created_at timestamptz default now();
+alter table public.leads add column if not exists updated_at timestamptz default now();
+update public.leads set origin = 'WhatsApp' where origin is null;
+update public.leads set proposal_value = 0 where proposal_value is null;
+update public.leads set created_at = now() where created_at is null;
+update public.leads set updated_at = now() where updated_at is null;
+
+alter table public.activities add column if not exists lead_id uuid references public.leads(id) on delete cascade;
+alter table public.activities add column if not exists user_id uuid references public.profiles(id) on delete cascade;
+alter table public.activities add column if not exists type text default 'observacao';
+alter table public.activities add column if not exists description text;
+alter table public.activities add column if not exists created_at timestamptz default now();
+update public.activities set type = 'observacao' where type is null;
+update public.activities set created_at = now() where created_at is null;
+
+alter table public.login_logs add column if not exists user_id uuid references public.profiles(id) on delete set null;
+alter table public.login_logs add column if not exists email text;
+alter table public.login_logs add column if not exists name text;
+alter table public.login_logs add column if not exists role text;
+alter table public.login_logs add column if not exists device text;
+alter table public.login_logs add column if not exists user_agent text;
+alter table public.login_logs add column if not exists created_at timestamptz default now();
+update public.login_logs set created_at = now() where created_at is null;
+
+alter table public.app_settings add column if not exists value text;
+alter table public.app_settings add column if not exists created_at timestamptz default now();
+alter table public.app_settings add column if not exists updated_at timestamptz default now();
+insert into public.app_settings (key, value)
+values ('whatsapp_template', 'Olá, tudo bem? Aqui é o {vendedor}, da RN Vision Pira.
+
+Vi que você tem interesse em {servico}. Posso te explicar as opções e valores?')
+on conflict (key) do nothing;
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_profiles_updated_at on public.profiles;
+create trigger trg_profiles_updated_at before update on public.profiles for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_services_updated_at on public.services;
+create trigger trg_services_updated_at before update on public.services for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_leads_updated_at on public.leads;
+create trigger trg_leads_updated_at before update on public.leads for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_app_settings_updated_at on public.app_settings;
+create trigger trg_app_settings_updated_at before update on public.app_settings for each row execute function public.set_updated_at();
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.role = 'admin'
+      and p.active = true
+  );
+$$;
+
+alter table public.profiles enable row level security;
+alter table public.services enable row level security;
+alter table public.leads enable row level security;
+alter table public.activities enable row level security;
+alter table public.login_logs enable row level security;
+alter table public.app_settings enable row level security;
+
+drop policy if exists profiles_select on public.profiles;
+drop policy if exists profiles_update_admin on public.profiles;
+drop policy if exists profiles_insert_admin on public.profiles;
+drop policy if exists profiles_delete_admin on public.profiles;
+
+drop policy if exists services_select on public.services;
+drop policy if exists services_insert_admin on public.services;
+drop policy if exists services_update_admin on public.services;
+drop policy if exists services_delete_admin on public.services;
+
+drop policy if exists leads_select on public.leads;
+drop policy if exists leads_insert on public.leads;
+drop policy if exists leads_update on public.leads;
+drop policy if exists leads_delete_admin on public.leads;
+
+drop policy if exists activities_select on public.activities;
+drop policy if exists activities_insert on public.activities;
+drop policy if exists activities_update_admin on public.activities;
+drop policy if exists activities_delete_admin on public.activities;
+
+drop policy if exists login_logs_select_admin on public.login_logs;
+drop policy if exists login_logs_insert_self on public.login_logs;
+drop policy if exists login_logs_delete_admin on public.login_logs;
+
+drop policy if exists app_settings_select on public.app_settings;
+drop policy if exists app_settings_insert_admin on public.app_settings;
+drop policy if exists app_settings_update_admin on public.app_settings;
+drop policy if exists app_settings_delete_admin on public.app_settings;
+
+create policy profiles_select on public.profiles
+for select using (public.is_admin() or id = auth.uid());
+
+create policy profiles_insert_admin on public.profiles
+for insert with check (public.is_admin());
+
+create policy profiles_update_admin on public.profiles
+for update using (public.is_admin() or id = auth.uid())
+with check (public.is_admin() or id = auth.uid());
+
+create policy profiles_delete_admin on public.profiles
+for delete using (public.is_admin());
+
+create policy services_select on public.services
+for select using (active = true or public.is_admin());
+
+create policy services_insert_admin on public.services
+for insert with check (public.is_admin());
+
+create policy services_update_admin on public.services
+for update using (public.is_admin()) with check (public.is_admin());
+
+create policy services_delete_admin on public.services
+for delete using (public.is_admin());
+
+create policy leads_select on public.leads
+for select using (public.is_admin() or vendedor_id = auth.uid());
+
+create policy leads_insert on public.leads
+for insert with check (public.is_admin() or vendedor_id = auth.uid());
+
+create policy leads_update on public.leads
+for update using (public.is_admin() or vendedor_id = auth.uid())
+with check (public.is_admin() or vendedor_id = auth.uid());
+
+create policy leads_delete_admin on public.leads
+for delete using (public.is_admin());
+
+create policy activities_select on public.activities
+for select using (
+  public.is_admin()
+  or user_id = auth.uid()
+  or exists (select 1 from public.leads l where l.id = activities.lead_id and l.vendedor_id = auth.uid())
+);
+
+create policy activities_insert on public.activities
+for insert with check (
+  public.is_admin()
+  or user_id = auth.uid()
+  or exists (select 1 from public.leads l where l.id = lead_id and l.vendedor_id = auth.uid())
+);
+
+create policy activities_update_admin on public.activities
+for update using (public.is_admin()) with check (public.is_admin());
+
+create policy activities_delete_admin on public.activities
+for delete using (public.is_admin());
+
+create policy login_logs_select_admin on public.login_logs
+for select using (public.is_admin());
+
+create policy login_logs_insert_self on public.login_logs
+for insert with check (user_id = auth.uid());
+
+create policy login_logs_delete_admin on public.login_logs
+for delete using (public.is_admin());
+
+create policy app_settings_select on public.app_settings
+for select using (true);
+
+create policy app_settings_insert_admin on public.app_settings
+for insert with check (public.is_admin());
+
+create policy app_settings_update_admin on public.app_settings
+for update using (public.is_admin()) with check (public.is_admin());
+
+create policy app_settings_delete_admin on public.app_settings
+for delete using (public.is_admin());
+
+notify pgrst, 'reload schema';
